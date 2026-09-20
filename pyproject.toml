@@ -1,0 +1,87 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "electropycal"
+version = "0.9.0"
+description = "Data processing and recalibration for electrochemical sensors (EIS/FSCV)."
+readme = "README.md"
+# Bounded at BOTH ends, for the same reason the dependencies are (see below).
+#
+# Floor 3.11, raised from 3.10: every pinned dependency's current release needs >=3.11, so
+# on 3.10 a fresh install silently resolves to a much older stack that still satisfies the
+# declared ranges -- measured against PyPI on 2026-09-20:
+#     scikit-learn  3.10 -> 1.7.2   3.11+ -> 1.9.1     (two minors; PLS numerics can move)
+#     pandas        3.10 -> 2.3.3   3.11+ -> 3.0.6     (a MAJOR version apart)
+#     numpy         3.10 -> 2.2.6   3.11+ -> 2.4.6
+# That is precisely the drift the dependency caps exist to stop, so declaring 3.10 was
+# promising a configuration this project has never run and would not want to. 3.11 is also
+# what bench.yml, the devcontainer and the reference host all use.
+#
+# Ceiling <3.14 because 3.14 is UNVALIDATED here, not because it is known broken --
+# scikit-learn 1.9.1 does ship 3.14 wheels. Same rule as the dependency caps: raise it on
+# purpose, after re-checking the reference metrics, not incidentally via a fresh install.
+requires-python = ">=3.11,<3.14"
+# PEP 639: an SPDX expression plus the file, rather than the legacy free-text table.
+# When this form is used the "License :: OSI Approved ::" classifier must NOT also be
+# given; modern build backends reject the combination.
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "thirteenbillion" }]
+keywords = ["electrochemistry", "FSCV", "EIS", "PLSR", "sensor recalibration"]
+classifiers = [
+    "Development Status :: 4 - Beta",          # 0.9.0: the API is still moving
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Typing :: Typed",                         # the package ships py.typed
+]
+# Upper bounds on the numerics stack are deliberate. The benchmark install resolved to
+# unpinned latest, and a scikit-learn MINOR bump can move PLS numerics -- which would shift
+# pooled_rmsep between a reference run and a runner run with nothing in the record to explain
+# it. Capping below the next minor keeps a cross-host comparison meaningful; raise a cap
+# on purpose, after re-checking the reference metrics, not incidentally via a fresh install.
+dependencies = [
+    "numpy>=1.24,<3",
+    "scipy>=1.10,<2",
+    "pandas>=2.0,<4",
+    "scikit-learn>=1.3,<1.10",   # PLS/Ridge numerics: the tight one
+    "pyarrow>=12.0",             # parquet -- format-stable, no numerics
+    "joblib>=1.3,<2",
+]
+
+[project.urls]
+Homepage = "https://github.com/thirteenbillion/electropycal"
+Repository = "https://github.com/thirteenbillion/electropycal"
+Documentation = "https://github.com/thirteenbillion/electropycal/blob/main/docs/USAGE.md"
+Changelog = "https://github.com/thirteenbillion/electropycal/blob/main/CHANGELOG.md"
+Issues = "https://github.com/thirteenbillion/electropycal/issues"
+
+[project.optional-dependencies]
+notebooks = ["jupyter", "matplotlib", "seaborn", "plotly", "pyarrow", "cycler"]
+# matplotlib/plotly are needed to COLLECT the suite: 7 test modules import them
+# (the plotting/review modules). Without them `pip install .[dev]` + pytest fails
+# at collection rather than skipping.
+dev = ["pytest>=7.4", "pytest-cov", "ruff", "mypy", "matplotlib", "plotly", "cycler"]
+
+[project.scripts]
+electropycal = "electropycal.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/electropycal"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: full-config runs (deselect with '-m \"not slow\"'); the fast suite uses the FAST profile",
+]

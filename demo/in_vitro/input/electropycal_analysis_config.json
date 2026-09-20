@@ -1,0 +1,19 @@
+{
+  "band": [
+    2.0,
+    2000.0
+  ],
+  "peak_method": "direct",
+  "acceptance": "monotonic",
+  "mono_tol": 0.1,
+  "min_norm_snr": 3.0,
+  "monotonic_r_min": 0.6,
+  "mono_method": "pearson",
+  "max_reps": 3,
+  "gate_on": {
+    "eis": true,
+    "monotonic": true,
+    "snr_all": false,
+    "peak_in_window": false
+  }
+}

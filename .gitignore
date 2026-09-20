@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.python-version
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Run outputs. `discover`, `freeze` and `deploy` write here by default.
+outputs/
+
+# The featureset the docs build in their worked example.
+featureset_extracted.parquet
+
+# Artifacts the notebooks write back into the data root when you run them: the
+# hash-keyed featureset caches and the QC-stats companion. Regenerated on demand.
+# (electropycal_analysis_config.json is NOT here: it is shipped demo content.)
+*_featureset__*.parquet
+electropycal_qc_stats.json
+
+# NOTE: demo/ is SHIPPED content (the synthetic demo dataset built by
+# scripts/build_demo_dataset.py) and is deliberately NOT ignored.

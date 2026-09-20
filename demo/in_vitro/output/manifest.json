@@ -1,0 +1,43 @@
+{
+  "generated_utc": "2026-09-20T21:29:40Z",
+  "synthetic": true,
+  "calibrated_from": "real in-vitro sessions (see synthetic.REAL_INVITRO_STATS)",
+  "feature_schema_version": 6,
+  "band_hz": [
+    2.0,
+    2000.0
+  ],
+  "counts": {
+    "dose_rows": 96,
+    "sensors": 8,
+    "timepoints": 4,
+    "sensitivity_rows": 24,
+    "invivo_rows": 144
+  },
+  "reference_stats": {
+    "eis": {
+      "n_freq": 37,
+      "f_lo": 1.0,
+      "f_hi": 1000000.0,
+      "Rs": 12510.0,
+      "Rct": 2083000.0,
+      "Cdl": 7.6e-08
+    },
+    "fscv": {
+      "n_sweep": 340,
+      "v_lo": -0.4,
+      "v_hi": 1.299,
+      "bg_slope": 18.39,
+      "bg_offset": 6.12,
+      "loop_uA": 22.29,
+      "v_ox": 0.819,
+      "peak_sigma": 0.187,
+      "normipeak_at_1uM": 0.02405,
+      "peak_beta": 0.394,
+      "noise_uA": 0.15,
+      "noise_tau": 9,
+      "rep_cv": 0.12,
+      "peak_bias_correction": 0.88
+    }
+  }
+}
