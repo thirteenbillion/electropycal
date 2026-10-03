@@ -99,7 +99,7 @@ target (not per-dose `NormIpeak`) is the deployable one.
 | pooled RMSEP, Q², macro, bootstrap CI | `evaluation.metrics` |
 | Track 1/2/3 objectives + aggregation | `evaluation.tracks` |
 | Task queue, decision gates, joblib fold parallelism, BLAS pinning | `discovery.scheduler` |
-| Per-fold execution + serialization + directory layout | `discovery.runner` |
+| Per-fold execution + serialization + directory layout | `discovery.runner`, `discovery.folds` |
 | Aggregation, rankings (`condition_ranking`/`feature_ranking`), `discovery_summary` | `discovery.scheduler._write_report` |
 | Frozen-model load + apply + predict; raw in-vivo recalibrate | `deployment.deploy` |
 | In-vivo raw ingestion (`paired`/`baseline`/`live` → featureset) | `features.extract.extract_invivo` |
@@ -182,9 +182,9 @@ around one baseline, a single run answers B1 to B4 at once, read off
 ## 7. Output layout
 
 `outputs/model_discovery_<ts>/` → `run_config.json`, `logs/`, `data/` (shared
-preprocessing, parquet/npy), `conditions/<name>/folds/<ch>_<t_test>/`
-(`model_arrays.npz`, `hyperparams.json`, `metrics.json`),
-`conditions/<name>/aggregated_metrics.json` + `feature_stability.parquet`,
+preprocessing, parquet/npy), `conditions/<name>/fold_models.npz` (every fold's arrays, keyed
+`<ch>_<t_test>__<array>`) + `folds.json` (each fold's manifest, hyperparameters and metrics),
+`conditions/<name>/aggregated_metrics.json` + `feature_stability.parquet` + `predictions.parquet`,
 top-level `summary.parquet`, `report/` (rankings + `discovery_summary.md`).
 
 ## 8. File formats

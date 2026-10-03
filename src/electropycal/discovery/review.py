@@ -16,6 +16,33 @@ import pandas as pd
 from .. import viz
 
 
+def _provenance(run_dir: Path) -> tuple[str, str]:
+    """(provenance slug, data-stage label) for a run directory, for :func:`viz.emit`.
+
+    Read from the run's own ``sweep_manifest.json`` rather than inferred from the path, so a
+    directory that was moved or renamed still reports what actually produced it. A run with
+    no manifest is the self-provisioned example case, which is exactly the one that must not
+    be mistaken for measurements, so it is labelled loudly instead of left blank.
+    """
+    import json
+    name = run_dir.name or "run"
+    try:
+        m = json.loads((run_dir / "sweep_manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return (f"unverified-{name}",
+                ("run directory carries no manifest: SOURCE UNVERIFIED, may be a synthetic "
+                 "example rather than measurements"))
+    env = m.get("environment", {})
+    released = env.get("electropycal_released")
+    ver = env.get("electropycal", "?")
+    if released is True:
+        return (f"{name}-rel{ver}", f"discovery run {name}, library {ver} (released)")
+    commit = (env.get("electropycal_commit") or "?")[:7]
+    return (f"{name}-dev{commit}",
+            (f"discovery run {name}, library built from checkout {commit}: NOT attributable "
+             f"to a released version"))
+
+
 def _tp_label(tp) -> str:
     return f"D{int(tp)}"
 
@@ -25,6 +52,7 @@ def plot_condition_ranking(run_dir, show: bool = True) -> pd.DataFrame:
     viz.ensure_style()
     import matplotlib.pyplot as plt
     run_dir = Path(run_dir)
+    _prov, _stage = _provenance(run_dir)
     cr = pd.read_parquet(run_dir / "report" / "condition_ranking.parquet").dropna(subset=["pooled_rmsep"])
     fig, ax = plt.subplots(figsize=(9, 3.6))
     err = [cr.pooled_rmsep - cr.rmsep_ci_lo, cr.rmsep_ci_hi - cr.pooled_rmsep]
@@ -32,7 +60,7 @@ def plot_condition_ranking(run_dir, show: bool = True) -> pd.DataFrame:
     ax.set_xlabel("pooled RMSEP (95% CI)"); ax.set_title("Condition ranking (best at bottom)")
     plt.tight_layout()
     if show:
-        viz.emit("review_condition_ranking")
+        viz.emit("review_condition_ranking", provenance=_prov, stage=_stage)
     return cr
 
 
@@ -41,6 +69,7 @@ def plot_fold_spread(run_dir, show: bool = True):
     viz.ensure_style()
     import matplotlib.pyplot as plt
     run_dir = Path(run_dir)
+    _prov, _stage = _provenance(run_dir)
     sm = pd.read_parquet(run_dir / "summary.parquet")
     order = list(sm.groupby("condition")["rmsep"].median().sort_values().index)
     fig, ax = plt.subplots(figsize=(9, 3.6))
@@ -49,7 +78,7 @@ def plot_fold_spread(run_dir, show: bool = True):
     ax.set_ylabel("per-fold RMSEP"); ax.set_title("Fold-level spread per condition")
     plt.tight_layout()
     if show:
-        viz.emit("review_fold_spread")
+        viz.emit("review_fold_spread", provenance=_prov, stage=_stage)
 
 
 def plot_feature_ranking(run_dir, top: int = 15, show: bool = True) -> pd.DataFrame:
@@ -57,13 +86,14 @@ def plot_feature_ranking(run_dir, top: int = 15, show: bool = True) -> pd.DataFr
     viz.ensure_style()
     import matplotlib.pyplot as plt
     run_dir = Path(run_dir)
+    _prov, _stage = _provenance(run_dir)
     fr = pd.read_parquet(run_dir / "report" / "feature_ranking.parquet").head(top)
     fig, ax = plt.subplots(figsize=(8, 4.5))
     ax.barh(fr.feature[::-1], fr.mean_selection_frequency[::-1], color="#55A868")
     ax.set_xlabel("mean selection frequency across conditions"); ax.set_title("Top features")
     plt.tight_layout()
     if show:
-        viz.emit("review_feature_ranking")
+        viz.emit("review_feature_ranking", provenance=_prov, stage=_stage)
     return fr
 
 
@@ -74,6 +104,7 @@ def plot_calibration_review(run_dir, condition: str | None = None, show: bool = 
     viz.ensure_style()
     import matplotlib.pyplot as plt
     run_dir = Path(run_dir)
+    _prov, _stage = _provenance(run_dir)
     cr = pd.read_parquet(run_dir / "report" / "condition_ranking.parquet").dropna(subset=["pooled_rmsep"])
     cond = condition or cr.sort_values("pooled_rmsep").condition.iloc[0]
     P = pd.read_parquet(run_dir / "conditions" / cond / "predictions.parquet")
@@ -96,7 +127,7 @@ def plot_calibration_review(run_dir, condition: str | None = None, show: bool = 
     ax.set_title(f"{cond}\ncalibration: true (mean +/- s.d. across sensors) vs predicted, by timepoint")
     ax.legend(fontsize=6, ncol=2); plt.tight_layout()
     if show:
-        viz.emit("review_calibration_review_1")
+        viz.emit("review_calibration_review_1", provenance=_prov, stage=_stage)
 
     fig, ax = plt.subplots(figsize=(4.4, 4.1))
     sc = ax.scatter(P.y_true, P.y_pred, c=np.log10(P.concentration), cmap="plasma", s=14, alpha=0.75)
@@ -104,7 +135,7 @@ def plot_calibration_review(run_dir, condition: str | None = None, show: bool = 
     ax.plot(lim, lim, "k--", lw=0.8); ax.set_xlabel("true NormIpeak"); ax.set_ylabel("predicted NormIpeak")
     ax.set_title("predicted vs true (parity)"); fig.colorbar(sc, ax=ax, label="log10 conc"); plt.tight_layout()
     if show:
-        viz.emit("review_calibration_review_2")
+        viz.emit("review_calibration_review_2", provenance=_prov, stage=_stage)
 
     r = P.residual.to_numpy()
     fig, axs = plt.subplots(2, 3, figsize=(13, 6.6))
@@ -125,7 +156,7 @@ def plot_calibration_review(run_dir, condition: str | None = None, show: bool = 
     axs[1, 2].set_xticklabels(devs, fontsize=7); axs[1, 2].set_xlabel("device"); axs[1, 2].set_title("by device")
     fig.suptitle(f"{cond} — residual diagnostics", y=1.01); plt.tight_layout()
     if show:
-        viz.emit("review_calibration_review_3")
+        viz.emit("review_calibration_review_3", provenance=_prov, stage=_stage)
 
     het = float(np.corrcoef(np.abs(P.y_pred), np.abs(r))[0, 1]) if len(P) > 2 else float("nan")
     print("RMSEP by concentration:", {float(k): round(v, 3) for k, v in P.groupby("concentration").residual.apply(rmse).items()})

@@ -263,8 +263,15 @@ outputs/model_discovery_<timestamp>/
 └── conditions/<name>/
     ├── aggregated_metrics.json       # pooled RMSEP + CI, macro RMSEP, Q²
     ├── feature_stability.parquet     # per-feature selection frequency
-    └── folds/<sensor>_t<timepoint>/  # model_arrays.npz, hyperparams.json, metrics.json
+    ├── predictions.parquet           # every held-out prediction, by sensor and timepoint
+    ├── fold_models.npz               # every fold's fitted model, keyed <fold>__<array>
+    └── folds.json                    # per fold: manifest, hyperparameters, metrics
 ```
+
+A fold is named `ch<sensor>_t<timepoint>`. `discovery.folds.fold_records(cond_dir)` reads the
+index and `load_fold_bundle(cond_dir, fold)` returns one fold's `(arrays, manifest)` for
+`models.base.predict_from_bundle`. Run directories from before 0.11.0 held one directory per
+fold under `folds/`; both readers accept that layout too.
 
 Open `report/discovery_summary.md` for the ranked table, or run
 **`notebooks/discovery_results_review.ipynb`** (set `RUN_DIR` to the run directory) to

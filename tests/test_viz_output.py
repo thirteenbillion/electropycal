@@ -24,7 +24,7 @@ def _headless(tmp_path, monkeypatch):
     monkeypatch.delenv("DISPLAY", raising=False)
     monkeypatch.delenv("ELECTROPYCAL_FIGURES", raising=False)
     viz._WRITTEN.clear()
-    viz.configure_output(tmp_path, formats=("png", "pdf"), show=None)
+    viz.configure_output(tmp_path, formats=("png", "pdf"), show=None, footer=False)
     yield tmp_path
     plt.close("all")
 
@@ -153,8 +153,12 @@ def test_a_real_plotting_function_writes_a_file(tmp_path):
     ranking.to_parquet(rd / "report" / "condition_ranking.parquet")
     review.plot_condition_ranking(rd)
     written = sorted(p.name for p in tmp_path.glob("*"))
-    assert "review_condition_ranking.png" in written
-    assert "review_condition_ranking.pdf" in written
+    # The run directory here has no sweep_manifest.json, which is the self-provisioned
+    # example case, so the filename must carry the unverified marker rather than the bare
+    # name: an unlabelled figure is indistinguishable from one drawn off real measurements.
+    assert "review_condition_ranking__unverified-run.png" in written, written
+    assert "review_condition_ranking__unverified-run.pdf" in written, written
+    assert "review_condition_ranking.png" not in written, "unstamped copy would be misread"
     assert plt.get_fignums() == [], "the module left a figure open"
 
 
@@ -172,3 +176,130 @@ def test_no_plotting_module_still_calls_plt_show_directly():
             if "plt.show()" in line and not line.lstrip().startswith("#"):
                 offenders.append(f"{f.relative_to(root)}:{i}")
     assert offenders == [], f"bare plt.show() found at {offenders}"
+
+
+def test_emit_without_provenance_keeps_the_bare_filename(tmp_path, monkeypatch):
+    """The default must not move: 0.10.0 shipped these exact names."""
+    monkeypatch.setenv("ELECTROPYCAL_FIGURES", str(tmp_path))
+    import matplotlib; matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from electropycal import viz
+    plt.figure(); plt.plot([0, 1], [0, 1])
+    names = {p.name for p in viz.emit("some_plot")}
+    assert names == {"some_plot.png", "some_plot.pdf"}
+
+
+def test_emit_provenance_stops_two_sources_overwriting_each_other(tmp_path, monkeypatch):
+    """The actual bug: same plot, two data sources, one filename, second silently wins."""
+    monkeypatch.setenv("ELECTROPYCAL_FIGURES", str(tmp_path))
+    import matplotlib; matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from electropycal import viz
+    for prov in ("demo-synthetic", "run-20261001_004258"):
+        plt.figure(); plt.plot([0, 1], [0, 1])
+        viz.emit("review_calibration", provenance=prov)
+    pngs = sorted(p.name for p in tmp_path.glob("*.png"))
+    assert pngs == ["review_calibration__demo-synthetic.png",
+                    "review_calibration__run-20261001_004258.png"], pngs
+    # and the bare name is NOT also written, so there is no unlabelled copy to misread
+    assert not (tmp_path / "review_calibration.png").exists()
+
+
+def test_review_provenance_flags_a_run_with_no_manifest(tmp_path):
+    """A self-provisioned example run has no manifest. That is the case that must shout."""
+    from electropycal.discovery.review import _provenance
+    prov, stage = _provenance(tmp_path / "model_discovery_x")
+    assert "unverified" in prov
+    assert "UNVERIFIED" in stage and "synthetic" in stage
+
+
+def test_review_provenance_distinguishes_released_from_checkout(tmp_path):
+    import json
+    rel, dev = tmp_path / "rel", tmp_path / "dev"
+    for d, env in ((rel, {"electropycal": "0.10.0", "electropycal_released": True}),
+                   (dev, {"electropycal": "0.10.0", "electropycal_released": False,
+                          "electropycal_commit": "abcdef1234"})):
+        d.mkdir()
+        (d / "sweep_manifest.json").write_text(json.dumps({"environment": env}), encoding="utf-8")
+    from electropycal.discovery.review import _provenance
+    p_rel, s_rel = _provenance(rel)
+    p_dev, s_dev = _provenance(dev)
+    assert "rel0.10.0" in p_rel and "released" in s_rel
+    assert "devabcdef1" in p_dev and "NOT attributable" in s_dev
+    assert p_rel != p_dev
+
+
+# ------------------------------------------------------------------ the figure log and index
+
+def test_a_saved_figure_carries_no_bookkeeping_text_by_default(tmp_path):
+    """Provenance goes to the filename and the log, not into the image."""
+    fig = _a_figure()
+    viz.emit("clean", fig, provenance="run-a", stage="extracted features", close=False)
+    assert fig.texts == [], [t.get_text() for t in fig.texts]
+    assert (tmp_path / "clean__run-a.png").exists()
+
+
+def test_the_footer_is_drawn_only_when_asked_for(tmp_path):
+    fig = _a_figure()
+    viz.emit("per_call", fig, provenance="run-a", stage="raw export", footer=True, close=False)
+    assert any("raw export" in t.get_text() and "run-a" in t.get_text() for t in fig.texts)
+    viz.configure_output(footer=True)
+    fig2 = _a_figure()
+    viz.emit("global", fig2, provenance="run-b", close=False)
+    assert any("run-b" in t.get_text() for t in fig2.texts)
+
+
+def test_every_save_is_logged_with_its_source_stage_and_params(tmp_path):
+    _a_figure()
+    viz.emit("heatmap", provenance="featureset abc1234", stage="QC-gated features",
+             params={"devices": "neurostring", "doses": "separate"})
+    log = (tmp_path / viz.LOG_NAME).read_text(encoding="utf-8")
+    assert "heatmap__featureset_abc1234  [png, pdf]" in log
+    assert "data      featureset abc1234" in log
+    assert "stage     QC-gated features" in log
+    assert "  param     devices=neurostring\n  param     doses=separate\n" in log
+    assert "library   electropycal " in log
+    assert "replaces" not in log
+
+
+def test_an_overwrite_keeps_the_old_entry_and_says_what_it_replaced(tmp_path):
+    for _ in range(2):
+        _a_figure()
+        viz.emit("same_name", provenance="src")
+    entries = [e for e in viz._read_log(tmp_path / viz.LOG_NAME) if e["stem"] == "same_name__src"]
+    assert len(entries) == 2
+    assert entries[1]["replaces"] == f"version saved {entries[0]['saved']}"
+
+
+def test_a_save_without_provenance_says_so_rather_than_leaving_a_blank(tmp_path):
+    _a_figure()
+    viz.emit("bare")
+    log = (tmp_path / viz.LOG_NAME).read_text(encoding="utf-8")
+    assert "data      (not recorded: pass provenance=)" in log
+
+
+def test_the_index_lists_what_is_on_disk_and_flags_what_the_log_cannot_vouch_for(tmp_path):
+    _a_figure(); viz.emit("kept", provenance="src", params={"k": 2})
+    _a_figure(); viz.emit("deleted", provenance="src")
+    (tmp_path / "deleted__src.png").unlink()
+    (tmp_path / "deleted__src.pdf").unlink()
+    _a_figure(); plt.savefig(tmp_path / "made_by_hand.png"); plt.close("all")
+
+    text = viz.figure_index(tmp_path)
+    assert text == (tmp_path / viz.INDEX_NAME).read_text(encoding="utf-8")
+    assert "kept__src  [pdf, png]" in text and "param     k=2" in text
+    assert "deleted__src  [" not in text
+    assert "1 logged figure(s) no longer on disk" in text
+    unlogged = text.split("NOT IN THE LOG")[1]
+    assert "made_by_hand  [png]" in unlogged
+    # The history still has the deleted figure.
+    assert "deleted__src" in (tmp_path / viz.LOG_NAME).read_text(encoding="utf-8")
+
+
+def test_the_index_is_newest_first(tmp_path):
+    import time
+    _a_figure(); viz.emit("older")
+    time.sleep(1.1)                                  # the log has one-second resolution
+    _a_figure(); viz.emit("newer")
+    text = (tmp_path / viz.INDEX_NAME).read_text(encoding="utf-8")
+    assert text.index("newer  [") < text.index("older  [")

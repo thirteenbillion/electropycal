@@ -96,6 +96,7 @@ def freeze_top(run_dir: str | Path, data, condition: str | None = None,
     import pandas as pd
 
     from ..discovery.config import RunData
+    from ..discovery.folds import fold_records
     run_dir = Path(run_dir)
     ranking = pd.read_parquet(run_dir / "report" / "condition_ranking.parquet")
     ranking = ranking.dropna(subset=["pooled_rmsep"]).sort_values("pooled_rmsep")
@@ -109,7 +110,7 @@ def freeze_top(run_dir: str | Path, data, condition: str | None = None,
     cond_dir = run_dir / "conditions" / condition
     cfg = read_json(cond_dir / "condition_config.json")
 
-    ks = [read_json(p)["k"] for p in sorted((cond_dir / "folds").glob("*/hyperparams.json"))]
+    ks = [r["hyperparams"]["k"] for r in fold_records(cond_dir).values() if "hyperparams" in r]
     k = int(statistics.mode(ks)) if ks else int(cfg["k_grid"][0])
 
     names = None

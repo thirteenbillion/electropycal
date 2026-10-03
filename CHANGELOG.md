@@ -5,6 +5,80 @@ means what semver says it means: **the public API may change in a minor release.
 version if you depend on it. 1.0.0 will be a deliberate act, once the surface has stopped
 moving, not a scheduled follow-up.
 
+## 0.11.0
+
+### Changed: a condition writes two fold files, not four per fold
+
+A discovery run wrote each outer fold's fitted model as its own directory,
+`conditions/<name>/folds/<fold>/`, holding `model_arrays.npz`, `manifest.json`,
+`hyperparams.json` and `metrics.json`. On a real featureset that is about 1,400 files per
+condition and well over 100,000 per sweep, almost all of them a few hundred bytes. File count,
+not computation, then decides how long a run takes on any filesystem with a per-file cost: a
+network mount, a synced folder, an archive step.
+
+The same content now goes into two files per condition:
+
+- `fold_models.npz`: every fold's arrays, keyed `<fold>__<array>`, e.g. `ch3_t28__coef`.
+- `folds.json`: `{"layout": 2, "folds": {<fold>: {"manifest", "hyperparams", "metrics"}}}`.
+
+A whole condition is about six files. The per-fold files never acted as checkpoints, since a
+condition's folds are written together when it finishes, so nothing is lost by merging them.
+Arrays are stored uncompressed, as before, and every number a run reports is unchanged.
+
+`discovery.folds` reads both: `fold_names(cond_dir)`, `fold_records(cond_dir)` for the
+manifests, hyperparameters and metrics without touching any array, and
+`load_fold_bundle(cond_dir, fold)`, which returns one fold's `(arrays, manifest)` for
+`models.base.predict_from_bundle` and reads only that fold's members of the archive.
+
+**Migrating.** Run directories written by 0.10.0 or earlier need no conversion: every reader,
+including `deployment.freeze_top`, accepts the one-directory-per-fold layout too. Code that
+globbed `conditions/<name>/folds/*/` itself should call `fold_records` or `load_fold_bundle`
+instead, which work on both.
+
+### Added: a figure log, and figures that say where their data came from
+
+A figure drawn from a synthetic example run and the same figure drawn from real
+measurements wrote to the same path, so the second silently replaced the first and the two
+were afterwards indistinguishable. Separately, nothing recorded whether a figure showed an
+instrument export or quality-gated features, which makes gated-out points look like missing
+data.
+
+`viz.emit` takes three new keyword arguments. `provenance` identifies the data source and is
+slugified into the filename, so two sources no longer collide and a copied file still names
+its source. `stage` names the processing state of the data. `params` records the choices
+that shaped the plot, such as a filter, a pooling or an encoding. `provenance=None` keeps
+the previous filenames exactly.
+
+All three go to a plain-text log rather than into the image, so a saved figure carries
+nothing but the plot. The output directory gains two files:
+
+- `FIGURES_LOG.txt`, append-only: one block per save with the data source, stage, params,
+  library version and, on an overwrite, which earlier version it replaced. Because filenames
+  are stable and overwrite, this is the only record of an earlier version or a deleted file.
+- `FIGURES.txt`, rebuilt on every save: each figure on disk now, newest first, with its
+  entry, plus any image the log cannot vouch for. `viz.figure_index()` rebuilds it after
+  files are added or deleted by hand.
+
+`emit(..., footer=True)` or `configure_output(footer=True)` also draws stage and source into
+the image, for a working figure that will travel without its log. It is off by default.
+
+`discovery.review` fills `provenance` and `stage` in from the run's own manifest rather than
+from its path, so a renamed directory still reports what produced it, and a run with no
+manifest is marked unverified in its filename and its log entry.
+
+### Fixed: the notebooks' setup cell could not upgrade an existing install
+
+Every notebook began with `pip install -q electropycal`, and `pip install` is a no-op when
+any version is already present: it does not upgrade. A hosted runtime carrying an older
+version from an earlier session therefore kept it, while the cell reported success. The
+symptom was a failure deep inside the EIS reader on an export the older version cannot
+parse, with nothing pointing at the version as the cause.
+
+The cell now uses `pip install -q --upgrade electropycal` and checks the version in place,
+raising a readable error that names what is installed and says to upgrade and then restart
+the runtime, since a module already imported stays in memory and an upgrade does not reach
+it.
+
 ## 0.10.0
 
 A data-loss fix in ingestion, and the surface hardening that came out of running the

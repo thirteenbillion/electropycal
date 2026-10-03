@@ -3,10 +3,10 @@
 Outer forward-chained folds evaluate; an inner forward-chained split selects
 hyperparameters (selector threshold × ``k``) using outer-training data only; the
 chosen configuration is refit on the full outer-training set and scored on the
-untouched outer-test fold. Each fold serializes a portable asset bundle
-(``model_arrays.npz`` + ``hyperparams.json`` + ``metrics.json``) into a per-fold
-directory layout; per-condition aggregation writes pooled metrics + feature
-stability.
+untouched outer-test fold. Each fold's portable asset bundle (arrays, manifest,
+hyperparameters, metrics) goes into the condition's ``fold_models.npz`` and
+``folds.json`` (see :mod:`.folds`); per-condition aggregation writes pooled metrics +
+feature stability.
 """
 
 from __future__ import annotations
@@ -46,11 +46,11 @@ from ..evaluation.metrics import FoldResult
 from ..evaluation.tracks import aggregate_by_track
 from ..features.normalize import (apply_median_impute, apply_zscore,
                                   fit_median_impute, fit_zscore)
-from ..models.base import save_model_bundle
 from ..models.variants import build
 from ..selection import cars, icc, univariate as uni
 from ..selection import pseudo_multivariate as pm
 from .config import Condition, Profile, RunData, effective_min_train_times
+from .folds import write_fold_bundles
 
 
 def _weights(condition: Condition, data: RunData, idx: np.ndarray):
@@ -309,10 +309,7 @@ def run_condition(condition: Condition, data: RunData, out_dir: str | Path,
             continue
         folds_results.append(p["fr"])
         rows.append(p["row"])
-        fold_dir = cond_dir / "folds" / p["fold_name"]
-        save_model_bundle(fold_dir, p["arrays"], p["manifest"])
-        write_json(fold_dir / "hyperparams.json", p["hyperparams"])
-        write_json(fold_dir / "metrics.json", p["metrics"])
+    write_fold_bundles(cond_dir, payloads)
 
     # per-test-row predictions (for calibration / residual review), split back to device + channel
     pred_frames = []

@@ -72,7 +72,7 @@ They apply at different stages, so do not try to stack them.
 
 ## On a cluster
 
-The task-queue scheduler writes per-condition and per-fold bundles and is restartable: a
+The task-queue scheduler writes each condition's outputs, fold models included, and is restartable: a
 failed task re-runs only its own condition, so a long sweep survives a preemption.
 
 There is no per-condition CLI index, so the straightforward split is by **target framing and

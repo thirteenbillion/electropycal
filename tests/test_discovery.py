@@ -5,6 +5,7 @@ import pytest
 
 from electropycal.data.synthetic import make_dataset
 from electropycal.discovery.config import Condition, FAST, Profile, RunData, baseline_queue
+from electropycal.discovery.folds import fold_records
 from electropycal.discovery.runner import run_condition
 from electropycal.discovery.scheduler import run_discovery
 
@@ -30,11 +31,12 @@ def test_run_condition_produces_valid_outputs(cond, data, tmp_path):
     cond_dir = tmp_path / "conditions" / cond.name
     assert (cond_dir / "aggregated_metrics.json").exists()
     assert (cond_dir / "feature_stability.parquet").exists()
-    # every fold serialized a portable bundle
-    for fold in (cond_dir / "folds").iterdir():
-        assert (fold / "model_arrays.npz").exists()
-        assert (fold / "hyperparams.json").exists()
-        assert (fold / "metrics.json").exists()
+    # every usable fold serialized a portable bundle, into one archive + one index
+    assert (cond_dir / "fold_models.npz").exists() and (cond_dir / "folds.json").exists()
+    assert not (cond_dir / "folds").exists()
+    records = fold_records(cond_dir)
+    assert len(records) == len(rows)
+    assert all({"manifest", "hyperparams", "metrics"} <= set(r) for r in records.values())
 
 
 def test_random_track_diagnostic_runs(data, tmp_path):

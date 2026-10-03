@@ -127,6 +127,16 @@ _FORMATS: tuple[str, ...] = ("png", "pdf")
 _SHOW: bool | None = None
 #: Emitted paths, in order, for tests and for a caller that wants to list what it made.
 _WRITTEN: list[_Path] = []
+#: Draw the data source and processing stage into the image as a footer. Off by default, so
+#: a saved figure carries nothing but the plot: provenance goes to the filename and to the
+#: figure log instead. Turn it on for working figures that will travel without the log.
+_FOOTER: bool = False
+
+#: Append-only history of every save in the output directory, one block per save.
+LOG_NAME = "FIGURES_LOG.txt"
+#: What is in the output directory now: rebuilt from the log and a scan on every save.
+INDEX_NAME = "FIGURES.txt"
+_IMAGE_EXTS = (".png", ".pdf", ".svg", ".jpg", ".jpeg", ".tif", ".tiff", ".eps")
 
 
 def _default_out_dir() -> _Path:
@@ -148,14 +158,18 @@ def _default_out_dir() -> _Path:
 _UNSET = object()
 
 
-def configure_output(out_dir=_UNSET, formats=_UNSET, show=_UNSET) -> _Path:
-    """Set where :func:`emit` writes, what formats, and whether to also display.
+def configure_output(out_dir=_UNSET, formats=_UNSET, show=_UNSET, footer=_UNSET) -> _Path:
+    """Set where :func:`emit` writes, what formats, whether to also display, and whether to
+    draw the provenance footer into the image.
 
     Returns the resolved output directory. Safe to call repeatedly: an argument not supplied
     is left unchanged, and ``out_dir`` resolves to the default on first use. Pass
     ``show=None`` to restore backend-sniffing, ``show=True``/``False`` to force it.
+    ``footer`` defaults to off; the figure log records the same information either way.
     """
-    global _OUT_DIR, _FORMATS, _SHOW
+    global _OUT_DIR, _FORMATS, _SHOW, _FOOTER
+    if footer is not _UNSET:
+        _FOOTER = bool(footer)
     if out_dir is not _UNSET and out_dir is not None:
         _OUT_DIR = _Path(out_dir)
     elif _OUT_DIR is None:
@@ -203,11 +217,43 @@ def _slug(name: str) -> str:
     return out or "figure"
 
 
-def emit(name: str, fig=None, *, formats=None, close: bool = True) -> list[_Path]:
+def _version() -> str:
+    try:
+        from . import __version__
+    except ImportError:
+        return "?"
+    return str(__version__)
+
+
+def emit(name: str, fig=None, *, formats=None, close: bool = True,
+         provenance: str | None = None, stage: str | None = None,
+         params: dict | None = None, footer: bool | None = None) -> list[_Path]:
     """Save the current figure under ``name``, then close it. Show too where that works.
 
     ``name`` must be stable for a given plot: re-running overwrites rather than
-    accumulating. Returns the paths written.
+    accumulating. Returns the paths written. Every save is also recorded in the output
+    directory's figure log (``FIGURES_LOG.txt``, append-only) and its index of what is on
+    disk now (``FIGURES.txt``); see :func:`figure_index`.
+
+    ``provenance`` identifies **what data produced the figure**. It is slugified into the
+    filename and recorded in the log. Pass it whenever a plot can be made from more than
+    one source, which is most of them. Without it, a figure drawn from a synthetic example
+    run and the same figure drawn from real measurements write to the *same* path and the
+    second silently replaces the first, leaving two indistinguishable images. That is not a
+    hypothetical: it is why a set of convincing-looking calibration plots turned out to be
+    synthetic. The filename carries it because a figure gets copied into a slide or a
+    message long after the log beside it is gone.
+
+    ``stage`` names the **processing state of the data**, recorded in the log. A reader
+    cannot otherwise tell extracted, quality-gated features from an instrument export, and
+    assuming the latter makes gated-out points look like missing data. Say which it is.
+
+    ``params`` records the choices that shaped the plot (a filter, a pooling, an encoding)
+    in the log, as ``key=value``. Only the caller knows them.
+
+    ``footer`` draws stage, provenance and library version into the image. Off unless
+    turned on here or with ``configure_output(footer=True)``, so a saved figure stays clean
+    enough to publish; the log holds the same information.
     """
     import matplotlib.pyplot as plt
 
@@ -217,13 +263,23 @@ def emit(name: str, fig=None, *, formats=None, close: bool = True) -> list[_Path
     out.mkdir(parents=True, exist_ok=True)
     exts = tuple(formats) if formats is not None else _FORMATS
 
+    draw_footer = _FOOTER if footer is None else bool(footer)
+    if draw_footer and (provenance or stage):
+        bits = [b for b in (stage, provenance) if b]
+        fig.text(0.995, 0.002, "  |  ".join([*bits, f"electropycal {_version()}"]),
+                 ha="right", va="bottom", fontsize=5.5, color="0.45", wrap=True)
+
     paths = []
     stem = _slug(name)
+    if provenance:
+        stem = f"{stem}__{_slug(provenance)}"
     for ext in exts:
         p = out / f"{stem}.{ext}"
         fig.savefig(p)
         paths.append(p)
         _WRITTEN.append(p)
+    _log_save(out, stem, exts, provenance, stage, params)
+    figure_index(out)
 
     if _can_show():
         plt.show()
@@ -232,6 +288,123 @@ def emit(name: str, fig=None, *, formats=None, close: bool = True) -> list[_Path
         # matplotlib starts warning about it around 20.
         plt.close(fig)
     return paths
+
+
+# ---------------------------------------------------------------------------------------
+# Figure log and index
+# ---------------------------------------------------------------------------------------
+# Plain text on purpose: readable in a terminal, a file browser, or printed into a chat,
+# with no tooling. The log is append-only because stable filenames overwrite, so the log is
+# the only record that an earlier version existed or what a deleted file was. The index is
+# derived, never appended, so it cannot drift from what is actually in the folder.
+
+_LOG_HEADER = (
+    "# Figure log: one block per save, newest last. Append-only, so the entry for an\n"
+    "# overwritten or deleted figure stays. What is on disk now: FIGURES.txt.\n\n")
+#: Field order in a block. ``param`` repeats, one line per parameter, so a long set stays
+#: readable on a narrow screen.
+_FIELDS = ("data", "stage", "param", "library", "replaces")
+
+
+def _now() -> str:
+    import datetime as _dt
+    return _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+
+def _one_line(v) -> str:
+    return " ".join(str(v).split())
+
+
+def _read_log(path: _Path) -> list[dict]:
+    """Parse the log into entries, oldest first. Tolerates hand edits it cannot read."""
+    import re
+    head = re.compile(r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC)  (\S+)  \[(.*)\]$")
+    field = re.compile(r"^  (\w+)\s+(.*)$")
+    entries: list[dict] = []
+    if not path.exists():
+        return entries
+    for line in path.read_text(encoding="utf-8").splitlines():
+        m = head.match(line)
+        if m:
+            entries.append({"saved": m.group(1), "stem": m.group(2), "formats": m.group(3)})
+            continue
+        m = field.match(line)
+        if m and entries:
+            if m.group(1) == "param":
+                entries[-1].setdefault("param", []).append(m.group(2))
+            else:
+                entries[-1][m.group(1)] = m.group(2)
+    return entries
+
+
+def _entry_lines(e: dict, *, with_replaces: bool) -> list[str]:
+    out = []
+    for k in _FIELDS:
+        if k not in e or (k == "replaces" and not with_replaces):
+            continue
+        for v in (e[k] if isinstance(e[k], list) else [e[k]]):
+            out.append(f"  {k:<9} {v}")
+    return out
+
+
+def _log_save(out: _Path, stem: str, exts, provenance, stage, params) -> None:
+    log = out / LOG_NAME
+    previous = [e for e in _read_log(log) if e["stem"] == stem]
+    e = {"saved": _now(), "stem": stem, "formats": ", ".join(exts),
+         "data": _one_line(provenance) if provenance else "(not recorded: pass provenance=)",
+         "stage": _one_line(stage) if stage else "(not recorded: pass stage=)"}
+    if params:
+        e["param"] = [f"{_one_line(k)}={_one_line(v)}" for k, v in params.items()]
+    e["library"] = f"electropycal {_version()}"
+    if previous:
+        e["replaces"] = f"version saved {previous[-1]['saved']}"
+    block = [f"{e['saved']}  {stem}  [{e['formats']}]", *_entry_lines(e, with_replaces=True), ""]
+    new = not log.exists()
+    with open(log, "a", encoding="utf-8", newline="\n") as fh:
+        if new:
+            fh.write(_LOG_HEADER)
+        fh.write("\n".join(block) + "\n")
+
+
+def figure_index(out_dir=None) -> str:
+    """Rebuild ``FIGURES.txt``: each figure on disk now, newest first, with its log entry.
+
+    Returns the text. :func:`emit` calls this after every save; call it yourself after
+    deleting or adding files by hand. Images with no log entry are listed separately: their
+    source is unknown, so they are not to be trusted as results.
+    """
+    out = _Path(out_dir) if out_dir is not None else output_dir()
+    if not out.exists():
+        return f"# No figures: {out} does not exist.\n"
+    latest = {e["stem"]: e for e in _read_log(out / LOG_NAME)}
+    on_disk: dict[str, list[str]] = {}
+    for p in sorted(out.iterdir()):
+        if p.is_file() and p.suffix.lower() in _IMAGE_EXTS:
+            on_disk.setdefault(p.stem, []).append(p.suffix[1:])
+
+    lines = [f"# Figures in {out.name}/ now, newest first. Rebuilt {_now()} from {LOG_NAME}",
+             "# and a scan of this folder. After deleting files by hand, refresh with",
+             "# electropycal.viz.figure_index().", ""]
+    logged = sorted((s for s in on_disk if s in latest),
+                    key=lambda s: latest[s]["saved"], reverse=True)
+    for s in logged:
+        e = latest[s]
+        lines += [f"{s}  [{', '.join(on_disk[s])}]", f"  {'saved':<9} {e['saved']}",
+                  *_entry_lines(e, with_replaces=False), ""]
+    if not logged:
+        lines += ["(no logged figures on disk)", ""]
+    unlogged = sorted(s for s in on_disk if s not in latest)
+    if unlogged:
+        lines.append("NOT IN THE LOG: source unknown, made outside emit or before the log "
+                     "existed. Do not read as results.")
+        lines += [f"  {s}  [{', '.join(on_disk[s])}]" for s in unlogged] + [""]
+    gone = sorted(s for s in latest if s not in on_disk)
+    if gone:
+        lines.append(f"{len(gone)} logged figure(s) no longer on disk; their entries remain "
+                     f"in {LOG_NAME}.")
+    text = "\n".join(lines).rstrip("\n") + "\n"
+    (out / INDEX_NAME).write_text(text, encoding="utf-8", newline="\n")
+    return text
 
 
 _STYLE_APPLIED = False

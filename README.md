@@ -25,7 +25,7 @@ featureset.
 **Discovery.** EIS/FSCV feature extraction, D0/Z normalization, forward-chained nested CV
 (Tracks 1/2/3), five architectures (linear, log, weighted, orthogonal, nonlinear PLSR), six
 selectors (CARS, VIP, SR, sMC, MI, ICC), a decision-gated task-queue scheduler with optional
-joblib fold-parallelism, and a checkpointed output layout (per-fold bundles,
+joblib fold-parallelism, and a checkpointed output layout (one model archive per condition,
 `summary.parquet`, a ranked `report/`).
 
 **Deployment.** Freeze a chosen model on 100% of in-vitro data, then recalibrate new in-vivo

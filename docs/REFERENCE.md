@@ -384,6 +384,10 @@ shared `AnalysisConfig` value, §1.1 is the one a configured run actually gets.
 - `scheduler.run_discovery(data, conditions=None, out_root="outputs",
   profile=None, seed=0, gate=None, batch_gate=None)`; `pin_blas_single_threaded()`.
 - `runner.run_condition(condition, data, out_dir, profile, seed=0)`.
+- `folds.fold_names(cond_dir)`, `fold_records(cond_dir) -> {fold: {"manifest",
+  "hyperparams", "metrics"}}`, `load_fold_bundle(cond_dir, fold) -> (arrays, manifest)`: the
+  per-fold models a condition writes to `fold_models.npz` + `folds.json`. Both read the
+  one-directory-per-fold layout of run directories written before 0.11.0.
 - `review.*`, plots over a finished run directory, each returning the frame it drew so the
   numbers are available without re-reading the run. All take `show=True`:
   `plot_condition_ranking(run_dir)` (pooled RMSEP with 95% CI per condition, best at
@@ -404,8 +408,16 @@ shared `AnalysisConfig` value, §1.1 is the one a configured run actually gets.
 
 #### `electropycal.viz`
 - `set_pub_style()`, apply Nature-style matplotlib defaults (compact sans-serif,
-  thin de-spined axes, frameless legends, Okabe-Ito CVD-safe cycle). Call once per
-  notebook. `categorical(n)`, n colors in fixed order; `SEQUENTIAL` = `"viridis"`.
+  thin de-spined axes, frameless legends, Okabe-Ito CVD-safe cycle). `ensure_style()`
+  applies it once per process and every plotting entry point calls it.
+  `categorical(n)`, n colors in fixed order; `SEQUENTIAL` = `"viridis"`.
+- `emit(name, fig=None, *, formats=None, provenance=None, stage=None, params=None,
+  footer=None)`, save a figure as PNG and PDF, close it, and display it where that works.
+  `provenance` is slugified into the filename; `provenance`, `stage` and `params` go to the
+  output folder's `FIGURES_LOG.txt` (append-only) and `FIGURES.txt` (what is on disk now),
+  not into the image unless `footer=True`. `configure_output(out_dir, formats, show,
+  footer)` sets the defaults; `figure_index()` rebuilds `FIGURES.txt` after files are added
+  or deleted by hand.
 
 #### `electropycal.diagnostics`
 - `variance.variance_hierarchy(...)` partitions each feature's variance into structural,

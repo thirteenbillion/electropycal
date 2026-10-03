@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "electropycal"
-version = "0.10.0"
+version = "0.11.0"
 description = "Data processing and recalibration for electrochemical sensors (EIS/FSCV)."
 readme = "README.md"
 # Bounded at BOTH ends, for the same reason the dependencies are (see below).
