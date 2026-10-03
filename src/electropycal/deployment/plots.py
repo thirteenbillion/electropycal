@@ -7,6 +7,7 @@ the confidence signal that flags when the frozen model is extrapolating beyond i
 """
 
 from __future__ import annotations
+from .. import viz
 
 
 def plot_domain_monitor(df, flag: float = 2.0, day_col: str = "day",
@@ -14,6 +15,7 @@ def plot_domain_monitor(df, flag: float = 2.0, day_col: str = "day",
                         confidence_col: str = "confidence"):
     """Two-panel monitor from a per-session summary frame: CORAL domain distance vs day (left) and
     the recalibrated output bars colored by confidence (right; red = extrapolating past ``flag``)."""
+    viz.ensure_style()
     import matplotlib.pyplot as plt
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 3.6))
     if confidence_col in df:
@@ -27,12 +29,13 @@ def plot_domain_monitor(df, flag: float = 2.0, day_col: str = "day",
     ax2.bar(df[day_col].astype(str), df[value_col], color=colors)
     ax2.set_xlabel("in-vivo day"); ax2.set_ylabel("mean recalibrated NormIpeak")
     ax2.set_title("Recalibrated output (red = extrapolating)")
-    plt.tight_layout(); plt.show()
+    plt.tight_layout(); viz.emit("deploy_domain_monitor")
 
 
 def plot_invivo_recalibration(res, flag: float = 2.0):
     """Two-panel figure from a ``recalibrate_invivo`` result frame (``timepoint``,
     ``mean_norm_ipeak``, ``domain_distance``): recalibrated response and domain shift vs in-vitro."""
+    viz.ensure_style()
     import matplotlib.pyplot as plt
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(11, 3.6))
     a1.plot(res.timepoint, res.mean_norm_ipeak, "o-")
@@ -42,4 +45,4 @@ def plot_invivo_recalibration(res, flag: float = 2.0):
     a2.axhline(flag, ls="--", color="0.5")
     a2.set_xlabel("in-vivo day"); a2.set_ylabel("CORAL domain distance")
     a2.set_title("domain shift vs in-vitro")
-    plt.tight_layout(); plt.show()
+    plt.tight_layout(); viz.emit("deploy_invivo_recalibration")

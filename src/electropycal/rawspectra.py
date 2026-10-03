@@ -42,6 +42,7 @@ from .features.extract import _avg_fscv
 from .features.fscv import (PEAK_WINDOW, DA_WINDOW, anodic_sweep, _locate_peak, norm_ipeak,
                             peak_at_edge, peak_edge_clipped, repeatability_snr, smooth_current)
 from .viz import channel_color, concentration_color, panel_grid, timepoint_label, tp_alpha
+from . import viz
 
 _CHRE = re.compile(r"Channel\s+(\d+)")
 _NAVY = "#1f2d7a"
@@ -66,6 +67,18 @@ def _fscv_channels_fast(path) -> list[int]:
     return []
 
 
+class NoSignalSessions(FileNotFoundError):
+    """Raised when a tree holds signal files but none that a session table can be built from.
+
+    :meth:`RawSpectraIndex.available_table` is built from **0 nM FSCV** exports only, since
+    that background is what defines a session for this review. A tree can therefore hold
+    plenty of EIS and dosed FSCV and still yield no rows, which is a different situation
+    from an empty tree and needs a different message. Left unguarded it surfaced as
+    ``KeyError: 'device'`` from inside a ``sort_values`` on a column-less frame, naming
+    neither the tree nor what was missing from it.
+    """
+
+
 class RawSpectraIndex:
     """Filename index + cached trace loaders for a data ``root`` (see module docstring)."""
 
@@ -86,6 +99,8 @@ class RawSpectraIndex:
         self._ch_at: dict = {}
 
         recs, dates = [], defaultdict(set)
+        from .data.paths import validate_raw_root
+        root = validate_raw_root(root, 'root')
         for folder in sorted(p for p in Path(root).iterdir() if p.is_dir()):
             fm = parse_folder(folder.name)
             if not fm or fm.get("testtype") != testtype:
@@ -136,6 +151,23 @@ class RawSpectraIndex:
                  "n_channels": len(chs), "channels": chs}
                 for r in self.signal[(self.signal.signaltype == "fscv") & (self.signal.dose == 0.0)].itertuples()
                 for chs in [_fscv_channels_fast(r.path)]]
+        if not rows:
+            # The guard above only asks whether ANY signal file was found. This table is
+            # built from 0 nM FSCV alone, so a tree can clear that guard and still produce
+            # nothing, and `pd.DataFrame([])` has no columns for `sort_values` to sort on.
+            by_type = self.signal.signaltype.value_counts().to_dict()
+            fscv = self.signal[self.signal.signaltype == "fscv"]
+            fscv_doses = sorted({d for d in fscv.dose if isinstance(d, float)})
+            raise NoSignalSessions(
+                f"{self.root}: found {len(self.signal)} signal file(s) but none is a 0 nM FSCV "
+                f"background, which is what a session row is built from.\n"
+                f"  found by type : {by_type}\n"
+                f"  FSCV doses    : {fscv_doses if fscv_doses else 'none'} nM "
+                f"(0 nM is the one needed; a 0 nM EIS file does not substitute)\n"
+                f"  needs         : a file per session named like "
+                f"'<deviceid>_fscv_0nM.csv' beside the EIS and dosed FSCV exports.\n"
+                f"If the tree was copied selectively, the 0 nM backgrounds are the ones to "
+                f"add: every other table here is keyed off them.")
         return pd.DataFrame(rows).sort_values(["device", "date"]).reset_index(drop=True)
 
     def concs(self, dev=None, include_zero=True) -> list[float]:
@@ -354,6 +386,7 @@ def plot_eis(idx: RawSpectraIndex, dev, kind="phase", band=None, nyq_top=15, tim
     """EIS figure: ``kind ∈ {'phase','mag','nyquist'}``. ``band`` restricts freqs; ``nyq_top`` keeps
     the N highest freqs on the Nyquist. Navy dashed = inductive onset (Bode); red points = inductive
     (fail EIS.1) on the Nyquist."""
+    viz.ensure_style()
     from matplotlib.lines import Line2D
     plt = _plt()
     chs = idx.eis_channels(dev)
@@ -410,11 +443,12 @@ def plot_eis(idx: RawSpectraIndex, dev, kind="phase", band=None, nyq_top=15, tim
     if kind == "nyquist" and nyq_top:
         suff += f" (top {nyq_top} freqs)"
     fig.suptitle(f"{idx.title(dev)} - EIS {name}{suff}", y=1.02)
-    fig.tight_layout(); plt.show()
+    fig.tight_layout(); viz.emit("raw_eis")
 
 
 def plot_eis_replicate_spread(idx: RawSpectraIndex, dev, comp="zr", timepoints=None):
     """EIS replicate spread (mean ± s.d. over replicate cycles). ``comp ∈ {'zr','zi'}`` (Z′ / Z″)."""
+    viz.ensure_style()
     plt = _plt()
     j = 1 if comp == "zr" else 2
     lab = "Z' (Ohm)" if comp == "zr" else "Z'' = Im(Z) (Ohm)"
@@ -440,12 +474,13 @@ def plot_eis_replicate_spread(idx: RawSpectraIndex, dev, comp="zr", timepoints=N
         if a.get_legend_handles_labels()[1]:
             a.legend(fontsize=5.5, loc="best")
     fig.suptitle(f"{idx.title(dev)} - EIS {tname} replicate spread (mean +/- s.d.)", y=1.02)
-    fig.tight_layout(); plt.show()
+    fig.tight_layout(); viz.emit("raw_eis_replicate_spread")
 
 
 def plot_inductive_onset_vs_time(idx: RawSpectraIndex, dev, band=None, timepoints=None):
     """Inductive-onset frequency vs timepoint (true day spacing, log Hz). ``band`` draws the upper
     bound + the EIS.1-fail zone."""
+    viz.ensure_style()
     plt = _plt()
     chs = idx.eis_channels(dev)
     if not chs:
@@ -469,7 +504,7 @@ def plot_inductive_onset_vs_time(idx: RawSpectraIndex, dev, band=None, timepoint
             a.axhspan(band[1], max(top, band[1] * 1.05), color="red", alpha=0.06)
     fig.suptitle(f"{idx.title(dev)} - inductive onset frequency vs timepoint"
                  + (f" (BAND upper {int(band[1])} Hz)" if band is not None else ""), y=1.02)
-    fig.tight_layout(); plt.show()
+    fig.tight_layout(); viz.emit("raw_inductive_onset_vs_time")
 
 
 def plot_fscv_loops(idx: RawSpectraIndex, dev, transform="bgsub", concs=None, show_window=(0.0, 1.0),
@@ -486,6 +521,7 @@ def plot_fscv_loops(idx: RawSpectraIndex, dev, transform="bgsub", concs=None, sh
     - ``mark_clipped`` (default **off** — too busy at scale) marks an **edge-clipped** peak (lobe
       truncated by the sweep edge → ``peak_area`` under-estimate) with a red ✕. The clip is always
       recorded on the extracted ``peak_area_clipped`` column regardless of this flag."""
+    viz.ensure_style()
     from matplotlib.lines import Line2D
     plt = _plt()
     sw = idx.smooth_window if smooth_window is None else smooth_window
@@ -559,11 +595,12 @@ def plot_fscv_loops(idx: RawSpectraIndex, dev, transform="bgsub", concs=None, sh
                 for a in axes[:len(chs)]:
                     a.set_ylim(lo - pad, hi + pad)
         fig.suptitle(f"{idx.title(dev)} - FSCV {transform} @ {int(cc)} nM", y=1.02)
-        fig.tight_layout(); plt.show()
+        fig.tight_layout(); viz.emit("raw_fscv_loops")
 
 
 def plot_dose_response(idx: RawSpectraIndex, dev, timepoints=None):
     """NormIpeak vs concentration (per-replicate points + mean ± s.d. line), channels as panels."""
+    viz.ensure_style()
     plt = _plt()
     chs = idx.fscv_channels(dev)
     if not chs:
@@ -590,11 +627,12 @@ def plot_dose_response(idx: RawSpectraIndex, dev, timepoints=None):
         if a.get_legend_handles_labels()[1]:
             a.legend(fontsize=5.5, loc="best")
     fig.suptitle(f"{idx.title(dev)} - NormIpeak vs concentration ({idx.peak_method})", y=1.02)
-    fig.tight_layout(); plt.show()
+    fig.tight_layout(); viz.emit("raw_dose_response")
 
 
 def plot_snr_vs_conc(idx: RawSpectraIndex, dev, timepoints=None):
     """Reproducibility SNR (mean/σ over replicate cycles) vs concentration; red dashed = MIN_NORM_SNR cutoff."""
+    viz.ensure_style()
     from matplotlib.lines import Line2D
     plt = _plt()
     cutoff = idx.cfg.min_norm_snr
@@ -631,11 +669,12 @@ def plot_snr_vs_conc(idx: RawSpectraIndex, dev, timepoints=None):
                  Line2D([0], [0], marker="o", color="0.5", ls="", label="replicates / sigma")]
         a.legend(handles=h + extra, fontsize=5.5, loc="best")
     fig.suptitle(f"{idx.title(dev)} - reproducibility SNR vs concentration (red = cutoff {cutoff:g}x)", y=1.02)
-    fig.tight_layout(); plt.show()
+    fig.tight_layout(); viz.emit("raw_snr_vs_conc")
 
 
 def plot_vpeak_vs_conc(idx: RawSpectraIndex, dev, timepoints=None):
     """V_peak vs concentration; gray = ideal DA window, crimson bands = edge-pinned zones."""
+    viz.ensure_style()
     from .features.fscv import PEAK_EDGE_TOL
     plt = _plt()
     chs = idx.fscv_channels(dev)
@@ -664,7 +703,7 @@ def plot_vpeak_vs_conc(idx: RawSpectraIndex, dev, timepoints=None):
         if a.get_legend_handles_labels()[1]:
             a.legend(fontsize=5.5, loc="best")
     fig.suptitle(f"{idx.title(dev)} - V_peak vs concentration ({idx.peak_method}); gray = ideal DA window", y=1.02)
-    fig.tight_layout(); plt.show()
+    fig.tight_layout(); viz.emit("raw_vpeak_vs_conc")
 
 
 def onset_table(idx: RawSpectraIndex, devices, timepoints=None) -> pd.DataFrame:
@@ -710,6 +749,7 @@ def eis_spread_table(idx: RawSpectraIndex, devices, timepoints=None, wide=False)
 def plot_vs_time(idx: RawSpectraIndex, dev, kind="norm", timepoints=None):
     """Temporal drift: channels as panels, one plasma-colored trace per concentration, true day
     spacing on x. ``kind ∈ {'norm','vpeak','snr'}``."""
+    viz.ensure_style()
     plt = _plt()
     chs = idx.fscv_channels(dev)
     if not chs:
@@ -767,7 +807,7 @@ def plot_vs_time(idx: RawSpectraIndex, dev, kind="norm", timepoints=None):
             a.legend(fontsize=5.5, loc="best")
     ttl = {"norm": "NormIpeak vs time", "vpeak": "V_peak vs time", "snr": "repeatability SNR vs time"}[kind]
     fig.suptitle(f"{idx.title(dev)} - {ttl} ({idx.peak_method}; color = concentration [plasma])", y=1.02)
-    fig.tight_layout(); plt.show()
+    fig.tight_layout(); viz.emit("raw_vs_time")
 
 
 def dose_stats_table(idx: RawSpectraIndex, devices, timepoints=None) -> pd.DataFrame:

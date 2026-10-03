@@ -20,6 +20,7 @@ from .data.pstrace import parse_filename, parse_folder, read_pstrace
 from .data.stabilization import (check_converged, estimate_settle_tau, round_drift_series,
                                  stabilization_traces)
 from .viz import channel_color, panel_grid, timepoint_label
+from . import viz
 
 _PHASE_LABEL = {"start": "first 3 (start)", "end": "last 3 (end)", "full": "full"}
 _PHASE_ORDER = ["full", "end", "start"]        # richest first
@@ -53,7 +54,8 @@ class StabilizationIndex:
         self.region = region
         self.drop_coldstart = drop_coldstart
 
-        rp = Path(root)
+        from .data.paths import validate_path
+        rp = validate_path(root, 'stabilization root')
         if not rp.is_dir():
             raise NoStabilizationFiles(
                 f"stabilization root is not a directory: {self.root!r}\n"
@@ -207,6 +209,7 @@ def _phase_legend(ax, phs):
 
 def plot_raw_cycles(idx: StabilizationIndex, pairs):
     """§1 — raw FSCV loops: first-round vs last-round last cycle per channel (pick V_target)."""
+    viz.ensure_style()
     from matplotlib.lines import Line2D
     import matplotlib.pyplot as plt
     for dev, tp in pairs:
@@ -231,11 +234,12 @@ def plot_raw_cycles(idx: StabilizationIndex, pairs):
             Line2D([0], [0], color="0.3", label=f"last round, last cycle (cycle {leg_last})")],
             fontsize=6, loc="best")
         fig.suptitle(f"{idx.title(dev)} - timepoint {timepoint_label(tp)} - raw FSCV loops", y=1.02)
-        fig.tight_layout(); plt.show()
+        fig.tight_layout(); viz.emit("stab_raw_cycles")
 
 
 def plot_i_vtarget(idx: StabilizationIndex, pairs):
     """§2 — I(V_target) vs cycle per channel."""
+    viz.ensure_style()
     import matplotlib.pyplot as plt
     for dev, tp in pairs:
         ph_tr = idx.load_phases(dev, tp)
@@ -253,11 +257,12 @@ def plot_i_vtarget(idx: StabilizationIndex, pairs):
             a.set_title(f"ch {ch}", fontsize=7); a.set_xlabel("cycle"); a.set_ylabel(f"I({idx.v_target} V) µA")
         _phase_legend(axes[0], phs)
         fig.suptitle(f"{idx.title(dev)} - timepoint {timepoint_label(tp)} - I(V_target) over cycles", y=1.02)
-        fig.tight_layout(); plt.show()
+        fig.tight_layout(); viz.emit("stab_i_vtarget")
 
 
 def plot_round_drift(idx: StabilizationIndex, pairs):
     """§3 — round-averaged drift (convergence metric) per channel, tol line drawn."""
+    viz.ensure_style()
     import matplotlib.pyplot as plt
     for dev, tp in pairs:
         ph_tr = idx.load_phases(dev, tp)
@@ -280,7 +285,7 @@ def plot_round_drift(idx: StabilizationIndex, pairs):
         _phase_legend(axes[0], phs)
         fig.suptitle(f"{idx.title(dev)} - timepoint {timepoint_label(tp)} - round-averaged {idx.region} "
                      f"drift (tol={idx.tol}, patience={idx.patience})", y=1.02)
-        fig.tight_layout(); plt.show()
+        fig.tight_layout(); viz.emit("stab_round_drift")
 
 
 def convergence_table(idx: StabilizationIndex, pairs) -> pd.DataFrame:

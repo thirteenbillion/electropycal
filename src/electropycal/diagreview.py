@@ -23,6 +23,7 @@ import pandas as pd
 
 from .diagnostics.variance import drift_alignment, drift_reliability, variance_hierarchy
 from .data.schema import RESERVED_COLUMNS
+from . import viz
 
 _FRE = re.compile(r"^(.+)_f(\d+)$")
 _FREQDEP_TYPES = ["R_s", "R_p", "C_s", "C_p", "ideality_C", "tau", "local_n"]
@@ -65,7 +66,10 @@ class DiagnosticsReview:
         self.freqindep_types = [c for c in self.STATE if feat_fidx(c) is None]
         self.predictor_types = list(self.freqdep_cols) + self.freqindep_types
         import matplotlib.pyplot as plt
-        cmap = plt.get_cmap("turbo")
+        # turbo is a rainbow and not colour-blind safe. These are feature TYPES, an
+        # unordered set, so a categorical palette is the honest encoding; the ramp is
+        # kept only because more types exist than Okabe-Ito has colours.
+        cmap = plt.get_cmap(viz.SEQUENTIAL)
         self.type_color = {t: cmap(0.05 + 0.90 * i / max(len(self.predictor_types) - 1, 1))
                            for i, t in enumerate(self.predictor_types)}
         self.freqs = self._inband_freqs()
@@ -202,6 +206,7 @@ class DiagnosticsReview:
 
     # ---- Section 1 — variance hierarchy --------------------------------------------------------
     def plot_featuretype_distributions(self, show: bool = True):
+        viz.ensure_style()
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots(figsize=(5.4, 3.4), dpi=140)
         h = self._annot_hist(ax, self.FEAT[RESP].to_numpy(float), RESP_COLOR, bins=40, nlabel="n_samples")
@@ -209,7 +214,7 @@ class DiagnosticsReview:
         ax.set_xlabel(f"{RESP} ({ru})" if ru else RESP); ax.set_ylabel("count")
         ax.legend(handles=h, fontsize=8, handlelength=1.4, labelspacing=0.25); plt.tight_layout()
         if show:
-            plt.show()
+            viz.emit("diag_featuretype_distributions_1")
         fig, axes = self._panels(len(self.freqindep_types))
         for a, t in zip(axes, self.freqindep_types):
             vals, nlab = self._col_samples(t)
@@ -218,7 +223,7 @@ class DiagnosticsReview:
             a.legend(handles=h, fontsize=4.6, loc="upper right", handlelength=0.9, labelspacing=0.15, borderpad=0.2)
         fig.suptitle("Frequency-independent featuretype distributions", y=1.01); plt.tight_layout()
         if show:
-            plt.show()
+            viz.emit("diag_featuretype_distributions_2")
         nf = 6
         fig, axes = self._panels(len(self.freqdep_cols))
         for a, (t, cols) in zip(axes, self.freqdep_cols.items()):
@@ -242,9 +247,10 @@ class DiagnosticsReview:
         fig.suptitle("Frequency-dependent featuretype distributions — density per in-band frequency "
                      "(median = red)", y=1.01); plt.tight_layout()
         if show:
-            plt.show()
+            viz.emit("diag_featuretype_distributions_3")
 
     def plot_variance_breakdown(self, show: bool = True) -> pd.DataFrame:
+        viz.ensure_style()
         import matplotlib.pyplot as plt
 
         def typevar(t):
@@ -273,12 +279,13 @@ class DiagnosticsReview:
         ax.set_title("Variance breakdown — response + above-median within-time (drift) featuretypes")
         ax.legend(fontsize=7, ncol=3, loc="upper right"); plt.tight_layout()
         if show:
-            plt.show()
+            viz.emit("diag_variance_breakdown")
         return (typevar_df.sort_values("within_time", ascending=False).head(10)
                 .rename(columns={"between_sensor": "between_channel_var", "within_time": "within_time_var",
                                  "within_dose": "within_dose_var"}))
 
     def plot_variance_decomposition(self, show: bool = True) -> pd.DataFrame:
+        viz.ensure_style()
         import matplotlib.pyplot as plt
         fig, axes = plt.subplots(1, 3, figsize=(13, 3.8), dpi=140)
         for ax, (key, lab, col) in zip(axes, COMP):
@@ -289,7 +296,7 @@ class DiagnosticsReview:
         fig.suptitle(f"Feature variance decomposition over {len(self.STATE)} predictor features "
                      "(response excluded)", y=1.03); plt.tight_layout()
         if show:
-            plt.show()
+            viz.emit("diag_variance_decomposition")
 
         def stats(x):
             x = x[np.isfinite(x)]
@@ -308,6 +315,7 @@ class DiagnosticsReview:
         return var_stats
 
     def plot_feature_3d(self, feature: str = "NormIpeak", color_by_channel: bool = False, show: bool = True):
+        viz.ensure_style()
         import matplotlib.pyplot as plt
         import matplotlib.colors as mcolors
         x = self.FEAT["channel"].to_numpy(float); y = self.FEAT["timepoint"].to_numpy(float)
@@ -340,10 +348,11 @@ class DiagnosticsReview:
             ax.set_xlabel("channel"); ax.set_ylabel("timepoint (days)"); ax.set_zlabel("log10 concentration (nM)")
             ax.set_title(f"{feature} (static — install plotly for interactive)"); plt.tight_layout()
             if show:
-                plt.show()
+                viz.emit("diag_feature_3d")
 
     # ---- Section 2 — reliability ---------------------------------------------------------------
     def plot_response_reliability(self, show: bool = True):
+        viz.ensure_style()
         import matplotlib.pyplot as plt
         from matplotlib.lines import Line2D
         n_rep = self.cfg.max_reps or 3
@@ -372,9 +381,10 @@ class DiagnosticsReview:
         ax[1].set_title("measurement noise vs total spread"); ax[1].legend(handles=h, fontsize=5.5, labelspacing=0.2)
         plt.tight_layout()
         if show:
-            plt.show()
+            viz.emit("diag_response_reliability")
 
     def plot_response_drift_reliability(self, show: bool = True):
+        viz.ensure_style()
         import matplotlib.pyplot as plt
         if self.sigma2_meas is None:
             self.plot_response_reliability(show=False)
@@ -396,9 +406,10 @@ class DiagnosticsReview:
         ax.set_ylabel("variance (absolute)"); ax.set_title("response variance decomposition vs noise floor")
         ax.legend(fontsize=7); ax.tick_params(axis="x", labelsize=8); plt.tight_layout()
         if show:
-            plt.show()
+            viz.emit("diag_response_drift_reliability")
 
     def plot_feature_measurement_reliability(self, show: bool = True) -> pd.DataFrame:
+        viz.ensure_style()
         import matplotlib.pyplot as plt
         REL = self._ensure_reliability()
         if REL is None:
@@ -427,11 +438,12 @@ class DiagnosticsReview:
         ax[1].legend(handles=self._type_legend_handles(), fontsize=4.3, loc="center left", bbox_to_anchor=(1.02, 0.5))
         plt.tight_layout()
         if show:
-            plt.show()
+            viz.emit("diag_feature_measurement_reliability")
         print(f"features measured above noise (R_meas > 0.5): {(mv['R_meas'] > 0.5).mean():.0%} of {len(mv)}")
         return MEAS
 
     def plot_feature_drift_reliability(self, show: bool = True) -> pd.DataFrame:
+        viz.ensure_style()
         import matplotlib.pyplot as plt
         REL = self._ensure_reliability()
         if REL is None:
@@ -460,7 +472,7 @@ class DiagnosticsReview:
         ax[1].legend(handles=self._type_legend_handles(), fontsize=4.3, loc="center left", bbox_to_anchor=(1.02, 0.5))
         plt.tight_layout()
         if show:
-            plt.show()
+            viz.emit("diag_feature_drift_reliability")
         print(f"resolvable drift: R_drift>0.5 for {(valid['R_drift']>0.5).mean():.0%}  |  "
               f"drift_snr>1 for {(valid['drift_snr']>1).mean():.0%}")
         return (DRIFT.groupby("type").agg(n=("R_drift", "size"), median_R_drift=("R_drift", "median"),
@@ -468,6 +480,7 @@ class DiagnosticsReview:
 
     # ---- Section 3 — drift alignment -----------------------------------------------------------
     def plot_drift_alignment(self, show: bool = True) -> pd.DataFrame:
+        viz.ensure_style()
         import matplotlib.pyplot as plt
 
         def row(col):
@@ -501,7 +514,7 @@ class DiagnosticsReview:
                                           ha="center", va="center", fontsize=8)
         plt.tight_layout()
         if show:
-            plt.show()
+            viz.emit("diag_drift_alignment")
         self._maxa = float(ALIGN["alignment_r"].abs().max())
         print(f"max |alignment| = {self._maxa:.2f}  ->  "
               f"{'a feature tracks the response drift (good)' if self._maxa > 0.5 else 'NO feature tracks the response drift'}")
@@ -509,6 +522,7 @@ class DiagnosticsReview:
                 .head(10)[["type", "alignment_r", "n_cells"]])
 
     def plot_frequency_bandwidth_tradeoff(self, show: bool = True):
+        viz.ensure_style()
         import matplotlib.pyplot as plt
         if self.root is None:
             print("frequency-bandwidth tradeoff needs the raw ROOT — skipping."); return
@@ -579,7 +593,7 @@ class DiagnosticsReview:
         ax[1].set_title("drift alignment across full measured range (shaded = current band)")
         ax[1].legend(fontsize=5, ncol=2, loc="lower left"); plt.tight_layout()
         if show:
-            plt.show()
+            viz.emit("diag_frequency_bandwidth_tradeoff")
         inb = (ref >= self.band[0]) & (ref <= self.band[1]) if ref is not None else np.array([], bool)
         ab = (ref > self.band[1]) if ref is not None else np.array([], bool)
 
@@ -589,6 +603,7 @@ class DiagnosticsReview:
         print(f"max |aligned drift| in-band = {peak(inb):.2f}   vs above ceiling = {peak(ab):.2f}")
 
     def plot_alignment_sanity_checks(self, show: bool = True):
+        viz.ensure_style()
         import matplotlib.pyplot as plt
         if self.ALIGN is None:
             self.plot_drift_alignment(show=False)
@@ -621,7 +636,7 @@ class DiagnosticsReview:
         ax.set_xlabel("|Pearson r| (same scale)"); ax.set_title("top 15 features by |drift alignment|")
         ax.legend(fontsize=7); plt.tight_layout()
         if show:
-            plt.show()
+            viz.emit("diag_alignment_sanity_checks")
         return {"max_drift_alignment": da, "max_absolute_alignment": aa}
 
     # ---- Section 4 — verdict -------------------------------------------------------------------
@@ -647,6 +662,7 @@ class DiagnosticsReview:
 
     # ---- Section 5 — D0-normalization effect ---------------------------------------------------
     def plot_d0_effect(self, show: bool = True):
+        viz.ensure_style()
         import matplotlib.pyplot as plt
         from matplotlib.patches import Patch
         from .features.normalize import d0_normalize_frame
@@ -669,7 +685,7 @@ class DiagnosticsReview:
                            Patch(facecolor="0.6", alpha=1.0, label="D0-normalized")], fontsize=7)
         plt.tight_layout()
         if show:
-            plt.show()
+            viz.emit("diag_d0_effect_1")
         topfeat = self.VAR["within_time"].idxmax()
         fig, ax = plt.subplots(1, 2, figsize=(12, 3.8), dpi=140, sharex=True)
         for si, s in enumerate(sorted(self.FEAT.sensor.unique())):
@@ -684,11 +700,12 @@ class DiagnosticsReview:
         fig.suptitle("top-drift feature: fabrication offset (raw) collapses to a common D0 baseline (right)", y=1.02)
         plt.tight_layout()
         if show:
-            plt.show()
+            viz.emit("diag_d0_effect_2")
         print(f"between-sensor median: raw {self.VAR['between_sensor'].median():.2f} -> D0 {VAR_D0['between_sensor'].median():.2f}"
               f"  |  within-time: raw {self.VAR['within_time'].median():.2f} -> D0 {VAR_D0['within_time'].median():.2f}")
 
     def plot_d0_invariance(self, show: bool = True):
+        viz.ensure_style()
         import matplotlib.pyplot as plt
         if getattr(self, "FEAT_D0", None) is None:
             self.plot_d0_effect(show=False)
@@ -717,12 +734,13 @@ class DiagnosticsReview:
         ax[1].legend(handles=self._type_legend_handles(), fontsize=4.3, loc="center left", bbox_to_anchor=(1.02, 0.5))
         plt.tight_layout()
         if show:
-            plt.show()
+            viz.emit("diag_d0_invariance")
         dmed = float((ALIGN_D0.loc[common] - self.ALIGN.loc[common, "alignment_r"]).abs().median())
         print(f"median |Δ alignment| raw→D0 = {dmed:.3f}  (≈0 ⇒ D0-norm does not distort the drift↔response signal).")
 
     # ---- Section 6 — response / deformation modes ---------------------------------------------
     def plot_response_modes(self, show: bool = True) -> pd.DataFrame:
+        viz.ensure_style()
         import matplotlib.pyplot as plt
         from .features.targets import sensitivity_featureset
         REL = self._ensure_reliability()
@@ -766,5 +784,5 @@ class DiagnosticsReview:
         ax.set_ylabel("variance share"); ax.set_title("Response / deformation modes — decomposition + R_drift")
         ax.legend(fontsize=7, ncol=3, loc="lower center", bbox_to_anchor=(0.5, 1.10)); plt.tight_layout()
         if show:
-            plt.show()
+            viz.emit("diag_response_modes")
         return MODES[["level", "between_sensor", "within_time", "within_dose", "R_drift", "drift_snr", "note"]]

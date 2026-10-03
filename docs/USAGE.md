@@ -99,7 +99,8 @@ discovery run; see `docs/RUNNING_AT_SCALE.md` for what those actually cost.
 
 The tree below shows the shape `extract` expects. `my_export/` stands for wherever your own
 PSTrace export lives. A working example of exactly this shape ships with the package as
-`demo/in_vitro/input/` (synthetic, ~15 s to rebuild with
+`demo/in_vitro/input/` in a checkout, or wherever `demo` resolves to from an install
+(synthetic, ~15 s to rebuild with
 `python scripts/build_demo_dataset.py`). **Every command in §4 and §5 leads with that demo
 path and is runnable as-is**; `my_export/` is always a stand-in for your own directory.
 
@@ -132,8 +133,9 @@ but excludes them from the featureset, and they feed the stabilization-review no
 ### 4.2 Extract to a featureset
 
 ```bash
-# Runnable as-is: demo/in_vitro/input ships with the package.
-electropycal extract --raw demo/in_vitro/input --out featureset_extracted.parquet
+# Runnable as-is from a bare `pip install`: `demo` resolves the bundled synthetic
+# dataset, and synthesizes an equivalent if this install has no copy of it.
+electropycal extract --raw demo --out featureset_extracted.parquet
 # → "featureset written to: featureset_extracted.parquet  (N rows, M sensors, P columns)"
 
 # Against your own data, substitute your PSTrace export directory.
@@ -162,7 +164,7 @@ class of bug the extraction pin exists to prevent. Pass a tuple, opt into `band=
 ### 4.3 Inspect the raw data first (optional but recommended)
 
 First open **`notebooks/raw_spectra_review.ipynb`** and run it: `ROOT` defaults to the
-shipped `demo/in_vitro/input`; point it at your own export to use real data:
+shipped demo tree; point it at your own export to use real data:
 per device it overlays the raw EIS spectra (Bode −phase / |Z| / Nyquist, with the
 inductive-onset crossover) and FSCV I–V loops + `i − i_bg` dose surface across timepoints,
 and recommends a `BAND`. Then open **`notebooks/quality_filtering_dashboard.ipynb`**, set
@@ -192,7 +194,7 @@ electropycal discover --data featureset_extracted.parquet --profile full --n-job
 # prints the ranked discovery_summary.md when done
 ```
 (You can also skip §4.2 and pass a raw directory straight to `--data`, `--data
-demo/in_vitro/input` with the shipped demo, or your own export directory, and extraction
+demo` with the shipped demo, or your own export directory, and extraction
 then uses `--band auto` too.)
 
 **Short time series:** forward-chained CV needs `min_train_times + 1` distinct timepoints (default
@@ -220,7 +222,8 @@ from electropycal.discovery.config import RunData, baseline_queue, Profile
 from electropycal.discovery.scheduler import run_discovery, auto_flag_conditions
 
 # band is required (no default); the shipped demo tree is a runnable example
-data = RunData.from_frame(extract_dataset("demo/in_vitro/input", band=(2.0, 2000.0)))
+from electropycal._demo import demo_input          # resolves or synthesizes the demo tree
+data = RunData.from_frame(extract_dataset(demo_input(), band=(2.0, 2000.0)))
 
 def batch_gate(batch_num, ranking, remaining):
     flags = auto_flag_conditions(ranking, remaining)     # advisory {name: reason}
@@ -321,7 +324,7 @@ of in-vitro data. Turnkey (picks the top-ranked condition, refits it, writes the
 bundle, no files copied from the run):
 ```bash
 # Runnable against the shipped demo, using the run directory §4.4 produced:
-electropycal freeze --run outputs/model_discovery_<ts> --data demo/in_vitro/input \
+electropycal freeze --run outputs/model_discovery_<ts> --data demo \
                     --out outputs/frozen_model
 #   add --condition <name> to freeze a specific one instead of the top-ranked
 
@@ -448,7 +451,7 @@ default is written down in exactly one place:
 | every default, and whether it is settled | `docs/REFERENCE.md` §1 |
 | how a parameter is surfaced (Python argument, CLI flag, or source only) | `docs/REFERENCE.md` §1.5 |
 | what a feature means and how it is derived | `docs/REFERENCE.md` §2 |
-| the 13 baseline conditions | `docs/REFERENCE.md` §4 |
+| the 14 baseline conditions | `docs/REFERENCE.md` §4 |
 | input and output directory layouts | `docs/REFERENCE.md` §5 |
 | the function-level API, module by module | `docs/REFERENCE.md` §6 |
 | why a default is what it is | `docs/DESIGN.md` |

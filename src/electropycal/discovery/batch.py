@@ -14,6 +14,7 @@ import pandas as pd
 
 from .runner import run_condition
 from .scheduler import auto_flag_conditions
+from .. import viz
 
 BATCH_LABEL = {1: "1. Baselines", 2: "2. Channel-specific",
                3: "3. P>N feature selection", 4: "4. New-channel generalization"}
@@ -78,6 +79,7 @@ class BatchRunner:
         print("queue now:", [c.name for c in self.queue])
 
     def plot(self, df: pd.DataFrame, title: str) -> pd.DataFrame:
+        viz.ensure_style()
         import matplotlib.pyplot as plt
         if not len(df):
             return df
@@ -87,5 +89,5 @@ class BatchRunner:
             err = [m.rmsep - m.ci_lo, m.ci_hi - m.rmsep]
             ax.bar(m.condition, m.rmsep, yerr=err, capsize=4, color="#4C72B0")
         ax.set_ylabel("pooled RMSEP (95% CI)"); ax.set_title(title)
-        plt.xticks(rotation=25, ha="right"); plt.tight_layout(); plt.show()
+        plt.xticks(rotation=25, ha="right"); plt.tight_layout(); viz.emit("batch_plot")
         return df

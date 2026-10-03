@@ -111,7 +111,7 @@ def _detrend(bg_sub: np.ndarray, voltages: np.ndarray,
     """Subtract a linear baseline fit to the non-Faradaic region.
 
     Removes a residual slope left by imperfect 0nM-vs-dosed background matching.
-    ⚠️ ``baseline_window`` must sit **below** the faradaic onset — on channels whose
+    NOTE: ``baseline_window`` must sit **below** the faradaic onset — on channels whose
     DA response is a broad, low-onset ramp, a baseline fit through the onset
     subtracts the signal itself (see the FSCV peak-definition note in ``docs/DESIGN.md``).
     Off by default.

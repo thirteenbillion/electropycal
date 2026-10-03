@@ -519,6 +519,7 @@ def extract_dataset(root: str | Path, band: tuple[float, float] | str | None = N
                     device_types=None,
                     on_empty_session: str = "warn",
                     pin=None,
+                    pin_mode: str = "reproduce",
                     pin_out: str | Path | None = None,
                     n_jobs: int = 1,
                     progress: bool = False) -> pd.DataFrame:
@@ -640,6 +641,16 @@ def extract_dataset(root: str | Path, band: tuple[float, float] | str | None = N
       a session short its EIS or 0 nM background yields zero rows without raising anywhere
       else, so a staged extraction would otherwise just be quietly smaller.
 
+    - ``pin_mode`` — ``"reproduce"`` (default) is the behaviour above: the input set must be
+      a subset of what the pin recorded, and a session the pin has never seen is an error.
+      ``"extend"`` keeps every pinned *anchor* (band, ``device_d0``, ``ref_grid``, the
+      per-sensor ``d0_row`` baselines, the feature columns) but permits **new** sessions, so
+      a corpus that has grown since the pin was written extracts without re-anchoring the
+      sessions that were already there. Pinned sessions are still row-count checked, and a
+      pinned session that produces no rows at all still raises, so extend does not weaken
+      the partial-fetch guarantee for data the pin knows about. Use it for an incremental
+      rebuild; use ``"reproduce"`` to verify a staged subset.
+
     With a pin, re-extracting a two-session subset reproduces exactly those sessions' rows
     from the full run — the property that makes analysis over staged data valid.
     """
@@ -651,7 +662,11 @@ def extract_dataset(root: str | Path, band: tuple[float, float] | str | None = N
     if on_empty_session not in ("warn", "raise", "ignore"):
         raise ValueError("on_empty_session must be 'warn', 'raise', or 'ignore', got "
                          f"{on_empty_session!r}")
-    root = Path(root)
+    # Before any inference over the corpus: the band percentile, the reference grid and
+    # device_d0 all iterate this directory, so an unvalidated path fails from inside one of
+    # them rather than at the argument the user actually got wrong.
+    from ..data.paths import validate_raw_root
+    root = validate_raw_root(root, "root")
     from .pin import (check_feature_columns, check_row_counts, check_sessions_against_pin,
                       load_pin, pinned_band, pinned_d0_rows, pinned_device_d0, ref_grid_for,
                       session_key)
@@ -659,6 +674,11 @@ def extract_dataset(root: str | Path, band: tuple[float, float] | str | None = N
 
     # Resolve the device-type filter before the walk: it decides which EIS channels feed the
     # band percentile and which types get a ref_grid anchor, so it cannot be applied later.
+    if pin_mode not in ("reproduce", "extend"):
+        raise ValueError(f"pin_mode must be 'reproduce' or 'extend', got {pin_mode!r}")
+    if pin_block is None and pin_mode != "reproduce":
+        raise ValueError("pin_mode is only meaningful with pin=; pass a pin or drop pin_mode.")
+
     if pin_block is not None:
         _pinned_types = pin_block.get("device_types") or None
         if device_types is None:
@@ -793,7 +813,7 @@ def extract_dataset(root: str | Path, band: tuple[float, float] | str | None = N
                       f"({_el:.0f}s elapsed, ETA {_eta:.0f}s)", flush=True)
 
     if pin_block is not None:
-        check_row_counts(pin_block, session_rows)
+        check_row_counts(pin_block, session_rows, allow_new=(pin_mode == "extend"))
 
     out = pd.DataFrame(rows)
     # The emitted column set is itself input-dependent (a feature type that produced no values

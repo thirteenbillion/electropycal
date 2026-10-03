@@ -66,6 +66,7 @@ featureset in `run_config.json` instead.
 | `device_types` | `None` | restrict extraction to given device types |
 | `on_empty_session` | `"warn"` | `"warn"` or `"raise"` when a session yields zero rows |
 | `pin` / `pin_out` | `None` | read a previous run's derived parameters, or write this run's |
+| `pin_mode` | `"reproduce"` | with `pin`: `"reproduce"` requires the input to be a subset the pin has seen; `"extend"` keeps the pinned anchors but admits new sessions, for an incremental rebuild |
 | `n_jobs` | `1` | worker processes over device-timepoint sessions |
 | `progress` | `False` | print per-session progress |
 
@@ -227,11 +228,11 @@ hill_n, power_a, power_beta`
 | `channel` | `loto_c_ac` | channel | forward-chained | per-sensor (Track 1); few folds |
 | `global` | `loto_c_ac` | global | forward-chained | pooled (Track 2); well-powered |
 | `universal` | `loco` | global | forward-chained | LOCO transfer (Track 3) |
-| `random` | `random` | random | ❌ diagnostic only | non-stationarity probe (E1) |
+| `random` | `random` | random | No: diagnostic only | non-stationarity probe (E1) |
 
 ---
 
-## 4. Baseline queue (`baseline_queue()`, 13 conditions)
+## 4. Baseline queue (`baseline_queue()`, 14 conditions)
 | Condition | Arch | Track | Selector | k_grid | threshold | weighted_by | transform |
 |-----------|------|-------|----------|--------|-----------|-------------|-----------|
 | baselines_1.1_linearPLSR | linear_plsr | global |, | (2) |, |, | linear |
@@ -244,7 +245,8 @@ hill_n, power_a, power_beta`
 | baselines_1.7_snrWeightedPLSR | weighted_plsr | global |, | (2,3) |, | repeatability_snr | linear |
 | channelspecific_2.1_linearPLSR | linear_plsr | channel |, | (2,3) |, |, | linear |
 | pNproblem_3.1_SR | linear_plsr | global | sr | (2,3) | (0.5,1.0) |, | linear |
-| pNproblem_3.1_sMC | linear_plsr | global | smc | (2,3) | (0.5,1.0) |, | linear |
+| pNproblem_3.1_VIP | linear_plsr | global | vip | (2,3) | (0.5,1.0) |, | linear |
+| pNproblem_3.1_sMC | linear_plsr | global | smc | (2,3) | (2.0,6.0) |, | linear |
 | pNproblem_3.2_CARS | linear_plsr | global | cars | (2,3) |, |, | linear |
 | newchannels_4.1_CARS | linear_plsr | universal | cars | (2,3) |, |, | linear |
 
@@ -357,7 +359,10 @@ shared `AnalysisConfig` value, §1.1 is the one a configured run actually gets.
 - `cars.cars_select(X, y, k_max=5, n_generations=50, n_folds=5, sample_ratio=0.9,
   timebox_patience=10, random_state=0)`; `cars_select_multiseed(seeds=(0,1,2))`.
 - `pseudo_multivariate.select(method, X, y, k, threshold)`, method ∈
-  `{"vip","sr","smc"}`. `univariate.mi_select(X, y, threshold)`.
+  `{"vip","sr","smc"}`. VIP and SR are ratio-valued and thresholded near 1.0; `"smc"` scores
+  `-log10(p)` against F(1, n-2), so its threshold is a significance level (2.0 means p <= 0.01).
+  `vip_scores`, `selectivity_ratio`, `smc_scores` (the raw F) and `smc_significance` are also
+  callable directly. `univariate.mi_select(X, y, threshold)`.
 - `icc.icc_prefilter(X, channel, timepoint, concentration, threshold)`.
 
 #### `electropycal.evaluation`
@@ -365,13 +370,28 @@ shared `AnalysisConfig` value, §1.1 is the one a configured run actually gets.
   `inner_split(...)`.
 - `metrics.FoldResult`, `pooled_rmsep`, `pooled_q2`, `macro_rmsep`,
   `bootstrap_rmsep_ci`, `aggregate`.
-- `tracks.aggregate_by_track(folds, track, n_boot=2000)`.
+- `tracks.aggregate_by_track(folds, track, n_boot=2000)`. Returns `pooled_rmsep` and
+  `n_folds` only when a condition yields no folds, so read the CI keys and `pooled_q2`
+  with `.get(key, nan)`.
+- `framing.compare_target_framings(df, value_col="NormIpeak", conc_col="concentration",
+  k=3, min_train_times=3, include_interaction=True, include_quadratic=True, min_conc=3,
+  min_conc_quad=4) -> DataFrame`, one row per target framing. Fits each framing under the
+  same forward-chained folds so the comparison is like-for-like, and inverts the quadratic
+  framing using the **training** dose grid, which is what a deployment has.
 
 #### `electropycal.discovery`
 - `config.Condition`, `Profile`, `RunData.from_frame(df)`, `FAST`, `baseline_queue()`.
 - `scheduler.run_discovery(data, conditions=None, out_root="outputs",
   profile=None, seed=0, gate=None, batch_gate=None)`; `pin_blas_single_threaded()`.
 - `runner.run_condition(condition, data, out_dir, profile, seed=0)`.
+- `review.*`, plots over a finished run directory, each returning the frame it drew so the
+  numbers are available without re-reading the run. All take `show=True`:
+  `plot_condition_ranking(run_dir)` (pooled RMSEP with 95% CI per condition, best at
+  bottom), `plot_fold_spread(run_dir)` (per-fold RMSEP by condition, ordered by median),
+  `plot_feature_ranking(run_dir, top=15)` (features by cross-condition mean selection
+  frequency), `plot_calibration_review(run_dir, condition=None)` (true against predicted by
+  timepoint, parity, and a six-panel residual diagnostic for one condition), and
+  `plot_target_framing_comparison(featureset, include_interaction=True)`.
 
 #### `electropycal.deployment`
 - `deploy.freeze_model(X, y, feature_names, architecture, k, out_dir,

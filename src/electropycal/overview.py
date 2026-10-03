@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from . import viz
 
 
 def _with_sensor(sel: pd.DataFrame) -> pd.DataFrame:
@@ -25,6 +26,7 @@ def _with_sensor(sel: pd.DataFrame) -> pd.DataFrame:
 def plot_qc_grid(sel: pd.DataFrame, show: bool = True):
     """Sensor × timepoint grid, colored by #concentrations retained (green = all, red = 0/dropped),
     positioned at true day spacing."""
+    viz.ensure_style()
     import matplotlib.pyplot as plt
     ov = _with_sensor(sel)
     if not len(ov):
@@ -41,7 +43,9 @@ def plot_qc_grid(sel: pd.DataFrame, show: bool = True):
                 xs.append(d); ys.append(ri); cs.append(v)
     span = (max(days) - min(days)) if len(days) > 1 else 1.0
     fig, ax = plt.subplots(figsize=(min(2 + 0.30 * span, 15), min(1.5 + 0.26 * len(rows), 12)), dpi=140)
-    sc = ax.scatter(xs, ys, c=cs, cmap="RdYlGn", vmin=0, vmax=nconc_max, marker="s", s=64,
+    # Not RdYlGn: a red-to-green ramp is the textbook colour-blind failure, and this panel
+    # encodes a COUNT, which wants a perceptually uniform sequential map anyway.
+    sc = ax.scatter(xs, ys, c=cs, cmap=viz.SEQUENTIAL, vmin=0, vmax=nconc_max, marker="s", s=64,
                     edgecolors="0.6", linewidths=0.3)
     ax.set_yticks(range(len(rows))); ax.set_yticklabels(rows, fontsize=5); ax.invert_yaxis()
     ax.set_xlabel("timepoint (days)"); ax.set_ylabel("sensor (device:channel)"); ax.margins(x=0.02, y=0.02)
@@ -49,19 +53,20 @@ def plot_qc_grid(sel: pd.DataFrame, show: bool = True):
     fig.colorbar(sc, label="# concentrations retained", fraction=0.03, pad=0.02)
     plt.tight_layout()
     if show:
-        plt.show()
+        viz.emit("overview_qc_grid")
 
 
 def plot_normipeak_per_sensor(sel: pd.DataFrame, yclip_pct: float | None = 99, ymax: float | None = None,
                               show: bool = True):
     """NormIpeak vs timepoint (true day spacing), one line per sensor, one panel per concentration.
     Per-panel y-top clipped to ``yclip_pct`` (or a hard ``ymax``) so outliers don't compress traces."""
+    viz.ensure_style()
     import matplotlib.pyplot as plt
     ov = _with_sensor(sel)
     if not len(ov):
         return
     concs = sorted(ov.concentration.unique()); sensors = sorted(ov.sensor.unique())
-    cm = plt.get_cmap("turbo")
+    cm = plt.get_cmap(viz.SEQUENTIAL)      # turbo is a rainbow; not CB-safe
     fig, axes = plt.subplots(1, len(concs), figsize=(max(3.0 * len(concs), 4), 3.6), dpi=140, squeeze=False)
     for ax, cc in zip(axes[0], concs):
         sub = ov[ov.concentration == cc]; vals = []
@@ -86,12 +91,13 @@ def plot_normipeak_per_sensor(sel: pd.DataFrame, yclip_pct: float | None = 99, y
                  f"- one line per sensor", y=1.04)
     plt.tight_layout()
     if show:
-        plt.show()
+        viz.emit("overview_normipeak_per_sensor")
 
 
 def plot_normipeak_per_device(sel: pd.DataFrame, ymax: float | None = None, show: bool = True):
     """Per-device mean NormIpeak vs timepoint (band = ±1 s.d.), device outliers excluded before
     averaging (median ± 3·MAD within each device × concentration). Skipped if no ``device`` column."""
+    viz.ensure_style()
     import matplotlib.pyplot as plt
     if "device" not in sel.columns:
         print("per-device overview skipped (no 'device' column — synthetic data)."); return
@@ -99,7 +105,9 @@ def plot_normipeak_per_device(sel: pd.DataFrame, ymax: float | None = None, show
     if not len(ov):
         return
     concs = sorted(ov.concentration.unique()); devices = sorted(ov.device.unique())
-    cmd = plt.get_cmap("tab10")
+    # Categorical, so an Okabe-Ito cycle rather than a colormap sampled at n points.
+    _devcols = viz.categorical(max(len(devices), 1))
+    cmd = lambda i: _devcols[int(i) % len(_devcols)]      # noqa: E731 - drop-in for get_cmap
 
     def keep_inliers(v):
         v = np.asarray(v, float); m = np.nanmedian(v)
@@ -128,7 +136,7 @@ def plot_normipeak_per_device(sel: pd.DataFrame, ymax: float | None = None, show
     fig.suptitle("NormIpeak vs timepoint - per-device average (outliers excluded; band = +/-1 s.d.)", y=1.04)
     plt.tight_layout()
     if show:
-        plt.show()
+        viz.emit("overview_normipeak_per_device")
 
 
 def conditions_table(queue) -> pd.DataFrame:

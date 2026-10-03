@@ -25,6 +25,7 @@ from .data.inventory import channel_quality_report
 from .data.pstrace import parse_filename, parse_folder
 from .features.fscv import PEAK_EDGE_TOL
 from .viz import channel_color, timepoint_label
+from . import viz
 
 _CHRE = re.compile(r"Channel\s+(\d+)")
 
@@ -64,6 +65,8 @@ class QCDashboard:
 
         # available index (0 nM FSCV headers only) + device-type map
         recs, dates, self.dtype_of = [], defaultdict(set), {}
+        from .data.paths import validate_raw_root
+        root = validate_raw_root(root, 'root')
         for folder in sorted(p for p in Path(root).iterdir() if p.is_dir()):
             fm = parse_folder(folder.name)
             if not fm or fm.get("testtype") != "signal":
@@ -219,6 +222,7 @@ class QCDashboard:
         ax.set_ylim(0, self.total_channels); ax.set_yticks(range(0, self.total_channels + 1))
 
     def plot_schedule(self, show: bool = True):
+        viz.ensure_style()
         import matplotlib.pyplot as plt
         from matplotlib.lines import Line2D
         from matplotlib.patches import Rectangle
@@ -246,9 +250,10 @@ class QCDashboard:
                       fontsize=7, loc="center left", bbox_to_anchor=(1.01, 0.5))
             fig.tight_layout()
             if show:
-                plt.show()
+                viz.emit("qc_schedule")
 
     def plot_dropout_by_check(self, show: bool = True):
+        viz.ensure_style()
         import matplotlib.pyplot as plt
         from matplotlib.lines import Line2D
         eisk = ["eis_A", "eis_B", "eis_C"]; fscvk = [c for c in self.dchecks if c not in eisk]
@@ -284,9 +289,10 @@ class QCDashboard:
             ax[1].legend(handles=handles, fontsize=5.5, loc="center left", bbox_to_anchor=(1.01, 0.5))
             fig.suptitle(f"{self.title(dev)} - quality dropout by check", y=1.03); fig.tight_layout()
             if show:
-                plt.show()
+                viz.emit("qc_dropout_by_check")
 
     def gate_impact(self, show: bool = True) -> pd.DataFrame:
+        viz.ensure_style()
         import matplotlib.pyplot as plt
         paired = self._paired
         total = len(paired); retained = int(paired.overall_valid.sum()); failed = total - retained
@@ -302,11 +308,12 @@ class QCDashboard:
         ax.set_xlabel("channel-timepoints failed"); ax.set_title("QC-gate impact (paired; per-gate failures overlap)")
         plt.tight_layout()
         if show:
-            plt.show()
+            viz.emit("qc_gate_impact")
         self._imp = imp
         return imp
 
     def plot_dose_monotonicity_sweep(self, rstar_n=None, show: bool = True):
+        viz.ensure_style()
         import matplotlib.pyplot as plt
         from scipy.stats import t as tdist
         from scipy.special import beta as betafn
@@ -341,7 +348,7 @@ class QCDashboard:
         ax[1].set_title("observed r vs null"); ax[1].legend(fontsize=6.5)
         plt.tight_layout()
         if show:
-            plt.show()
+            viz.emit("qc_dose_monotonicity_sweep")
         cmp = pd.DataFrame([
             {"pearson": dose_response_corr(g["concentration"].to_numpy(float), g["NormIpeak_avg"].to_numpy(float), "pearson"),
              "spearman": dose_response_corr(g["concentration"].to_numpy(float), g["NormIpeak_avg"].to_numpy(float), "spearman")}
@@ -350,6 +357,7 @@ class QCDashboard:
         return {"r_star": rs, "n_doses": nmed, "kept_at_r_min": int((r >= rmin).sum()) if r.size else 0}
 
     def plot_z_monotonicity_sweep(self, show: bool = True):
+        viz.ensure_style()
         import matplotlib.pyplot as plt
         zr = self._paired["eis_z_rise"].to_numpy(float); zr = zr[np.isfinite(zr)]
         tol = self.cfg.mono_tol
@@ -368,10 +376,11 @@ class QCDashboard:
         ax[1].set_title("|Z|-monotonicity stringency sweep"); ax[1].legend(fontsize=7)
         plt.tight_layout()
         if show:
-            plt.show()
+            viz.emit("qc_z_monotonicity_sweep")
         self._zr = zr
 
     def plot_snr_sweep(self, show: bool = True):
+        viz.ensure_style()
         import matplotlib.pyplot as plt
         snr = self.DOSE_TBL["repeatability_snr"].to_numpy(float); snr = snr[np.isfinite(snr)]
         m = self.cfg.min_norm_snr
@@ -389,7 +398,7 @@ class QCDashboard:
         ax[1].set_xlabel("min_norm_snr"); ax[1].set_ylabel("doses kept"); ax[1].set_title("SNR stringency sweep (per dose)")
         ax[1].legend(fontsize=7); plt.tight_layout()
         if show:
-            plt.show()
+            viz.emit("qc_snr_sweep")
         self._snr = snr
 
     # ---- finalized-dataset overview (reuses electropycal.overview) --------------------------------

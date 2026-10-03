@@ -5,6 +5,110 @@ means what semver says it means: **the public API may change in a minor release.
 version if you depend on it. 1.0.0 will be a deliberate act, once the surface has stopped
 moving, not a scheduled follow-up.
 
+## 0.10.0
+
+A data-loss fix in ingestion, and the surface hardening that came out of running the
+library from a bare install rather than from a checkout.
+
+### Fixed: exports with double-quoted lines could not be read
+
+**This is the reason to upgrade from 0.9.0.** An export is sometimes encountered with its
+lines wrapped in double quotes. 0.9.0 could not read it.
+
+The wrapping is selective *within* a file: the metadata lines, the EIS column header and
+the data rows are wrapped, while the `CH N:` block header is bare. Because that block
+header is bare, 0.9.0 did find the block, and then failed on the wrapped column header
+with a bare `StopIteration` naming neither the file nor the column. So on a real export
+this was a **loud, uninformative crash, not a silent drop**: reading a wrapped EIS export
+under 0.9.0 aborts, and nothing on the ingestion path catches it.
+
+Both styles now parse to bit-identical arrays, verified against a real wrapped export of
+969 lines and 24 blocks: all 24 blocks and 888 frequency points agree byte-for-byte with
+the same file unwrapped, in both encodings.
+
+Three silences and one bare crash became named errors, each identifying the file:
+
+- an EIS column not locatable, naming the column sought **and the header actually read**
+  (this is the one a wrapped export actually hits)
+- no FSCV or EIS blocks found at all, which is what a file wrapped on *every* line
+  including the `CH` header would do
+- FSCV blocks that recover zero samples, which is what a wrapped FSCV export would do.
+  Wrapping has only been observed on an EIS export, so this guard is precautionary.
+
+A stray byte-order mark inside the wrapper is also stripped. Real wrapped first lines read
+`"<BOM>File date:,...`; had the same quirk landed on the `Date and time:` line it would
+have dropped `export_date` with no error.
+
+### Fixed: an empty session table reported `KeyError: 'device'`
+
+`RawSpectraIndex.available_table()` is built from 0 nM FSCV backgrounds alone. A tree
+holding EIS and dosed FSCV but no 0 nM background therefore cleared the "any signal file"
+guard and produced no rows, and `pd.DataFrame([])` has no columns for `sort_values` to sort
+on. The result named neither the tree nor the missing file.
+
+New `rawspectra.NoSignalSessions` reports the tree, what was found by signal type, the FSCV
+doses present, and that a `<deviceid>_fscv_0nM.csv` per session is what to add. An empty
+tree is a different situation and still returns an empty frame with its columns intact,
+rather than raising.
+
+### Fixed: path errors reported from inside the wrong thing
+
+`extract --raw <bad path>` used to fail with a bare `FileNotFoundError` from inside the
+EIS band percentile, because `--band auto` runs a corpus pre-pass before anything checks
+the path. Three cases now report separately, before any inference:
+
+- the path does not exist, echoing what a relative path resolved to
+- the path is a **URL**, named as such, with the Colab mount recipe for a Drive link
+- the path exists but holds no session folders, and the message looks one level down *and*
+  one level up, because being one directory off is the actual mistake
+
+The CLI prints these as one sentence and exits 2 instead of printing a traceback.
+
+### Fixed: figures never reached disk
+
+48 `plt.show()` calls, no `savefig`, no `plt.close()`. Under a notebook kernel that
+renders; on a headless backend, which is CI and any sandboxed code execution, `show()` is
+a no-op and a plotting call reported success having produced nothing.
+
+- New `viz.emit(name)`: saves PNG **and PDF**, closes the figure, and displays only where
+  displaying can work. Every plotting function now ends in it.
+- Filenames are stable and overwrite on re-run. Output defaults to `figures/`.
+- `viz.ensure_style()` is applied at every plotting entry point, so the house style and
+  the Okabe-Ito palette are actually in effect rather than merely available.
+- Red-to-green and rainbow colormaps replaced with perceptually uniform, colour-blind-safe
+  ones on the QC grid, the per-sensor traces and the feature-type panels.
+
+### Added
+
+- **`--raw demo` and `--data demo`** resolve the bundled demo dataset, synthesizing an
+  equivalent when an install has no copy. The 0.9.0 README's first command used a literal
+  `demo/in_vitro/input`, which cannot work without a checkout. Every command in the README
+  and the user guide is now checked against a bare wheel install.
+- **`pin_mode="extend"`** on `extract_dataset`. A pin previously meant "reproduce exactly",
+  so adding a session to a corpus was an error and an incremental rebuild had to run
+  unpinned, re-deriving the band, `device_d0` and the reference grid from whatever happened
+  to be present. `extend` holds every pinned anchor and admits new sessions.
+- `smc_significance`, and `selection` now offers VIP as a third PLS-importance filter.
+- Path errors are importable: `data.paths.PathNotFound`, `NotAFilesystemPath`,
+  `NoSessionFolders`. Ingestion errors: `data.pstrace.PSTraceFormatError`.
+
+### Changed
+
+- **`smc_scores` was computing the selectivity ratio**, not sMC. It regressed each feature
+  on the target projection *with an intercept*, which recovers the loading and so
+  reproduced `selectivity_ratio` to 8e-15 with rank correlation 1.000000. It now uses the
+  normalized regression vector and returns the reference F statistic with (1, n-2) degrees
+  of freedom. Both old conditions computed a legitimate selectivity ratio, so no published
+  number was wrong; the designed contrast between them was.
+- `select("smc", ...)` scores `-log10(p)`, so its threshold is a significance level and is
+  portable across fold sizes. A raw F cutoff is not: at 2190 rows the 5% cutoff admits 136
+  of 143 features. The baseline queue's sMC thresholds are `(2.0, 6.0)`.
+- The baseline queue is **14 conditions, 12 CARS-free** (was 13 and 11), having gained VIP.
+- A missing `stabreview` root raises `PathNotFound`, not `NoStabilizationFiles`. 0.9.0
+  conflated "this tree has no stabilization sweeps" with "this tree does not exist"; they
+  want different fixes. Both remain `FileNotFoundError`, so existing handlers still catch.
+- `RunData.from_frame` names a path passed where a DataFrame belongs.
+
 ## 0.9.0
 
 First public release.

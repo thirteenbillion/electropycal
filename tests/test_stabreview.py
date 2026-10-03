@@ -68,11 +68,27 @@ def test_unparsable_folders_get_the_cause_that_fits():
     assert "stabilization-full.csv" not in msg
 
 
-def test_missing_root_raises_the_same_named_error():
+def test_missing_root_raises_a_path_error_not_a_no_files_error():
+    """Behaviour change in 0.10.0, and a deliberate sharpening.
+
+    0.9.0 answered a missing root with ``NoStabilizationFiles``, which conflated "this tree
+    has no stabilization sweeps in it" with "this tree does not exist". They want different
+    fixes, so they are now different errors. Both still subclass ``FileNotFoundError``, so
+    anything catching that is unaffected.
+    """
+    from electropycal.data.paths import PathNotFound
     missing = Path(tempfile.mkdtemp()) / "does-not-exist"
-    with pytest.raises(sr.NoStabilizationFiles) as ei:
+    with pytest.raises(PathNotFound) as ei:
         sr.StabilizationIndex(missing)
-    assert "not a directory" in str(ei.value) and str(missing) in str(ei.value)
+    msg = str(ei.value)
+    assert str(missing) in msg
+    assert "does not exist" in msg
+    assert issubclass(PathNotFound, FileNotFoundError)
+    # It must not claim there are NO stabilization files, which was the old conflation.
+    # ("stabilization root" in the message is the argument's name, which is fine.)
+    assert not isinstance(ei.value, sr.NoStabilizationFiles)
+    assert "no stabilization" not in msg.lower()
+    assert "_STAB_GLOB" not in msg and "stabilization*" not in msg
 
 
 def test_plots_and_convergence_table_run(idx):

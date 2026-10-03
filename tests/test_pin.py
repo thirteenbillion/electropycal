@@ -189,3 +189,88 @@ def test_pinned_d0_rows_are_used_rather_than_recomputed(tmp_path):
     import numpy as np
     assert np.allclose(doubled["R_s_f00"].to_numpy(float),
                        base["R_s_f00"].to_numpy(float) / 2.0, equal_nan=True)
+
+
+# ---------------------------------------------------------------------------------------
+# pin_mode="extend": grow the featureset without re-anchoring what is already in it
+# ---------------------------------------------------------------------------------------
+
+def _grown(tmp_path):
+    """The reference tree plus one later session for 2-2, which the pin has never seen."""
+    grown = tmp_path / "grown"
+    grown.mkdir()
+    _build_raw(grown)
+    _session(grown, "20260729", "2-2", [3, 5], peak_at=18)       # later than pinned d0
+    return grown
+
+
+def test_extend_admits_a_new_session_that_reproduce_rejects(tmp_path):
+    """The two modes differ on exactly one thing: a session the pin has never seen.
+
+    ``reproduce`` treats it as a fault, because those rows were never part of the pinned
+    featureset. ``extend`` treats it as the point of the run.
+    """
+    _root, _df, pin_path = _full(tmp_path)
+    grown = _grown(tmp_path)
+
+    with pytest.raises(PinMismatch, match="absent from the pin"):
+        extract_dataset(grown, d0_normalize=False, pin=pin_path)
+
+    out = extract_dataset(grown, d0_normalize=False, pin=pin_path, pin_mode="extend")
+    assert not out.empty
+
+
+def test_extend_leaves_every_already_pinned_row_bit_identical(tmp_path):
+    """Growing the corpus must not move a single pre-existing row.
+
+    This is the property the incremental rebuild depends on: yesterday's numbers stay
+    comparable to today's, so a result recorded against the old featureset still means
+    what it said.
+    """
+    _root, full, pin_path = _full(tmp_path)
+    grown = _grown(tmp_path)
+    out = extract_dataset(grown, d0_normalize=False, pin=pin_path, pin_mode="extend")
+
+    old = out[out.timepoint.isin(set(full.timepoint))].copy()
+    key = ["device", "channel", "timepoint", "concentration"]
+    a = full.sort_values(key).reset_index(drop=True)
+    b = old[old.set_index(key).index.isin(full.set_index(key).index)]
+    b = b.sort_values(key).reset_index(drop=True)
+    pd.testing.assert_frame_equal(a, b[a.columns])
+
+
+def test_extend_anchors_the_new_session_on_the_pinned_d0(tmp_path):
+    """The new session's timepoint is measured from the *pinned* origin, not a fresh one."""
+    _root, _full_df, pin_path = _full(tmp_path)
+    grown = _grown(tmp_path)
+    out = extract_dataset(grown, d0_normalize=False, pin=pin_path, pin_mode="extend")
+    # 2-2's pinned d0 is 2026-07-15; the added session is 2026-07-29, so 14 days.
+    assert 14.0 in set(out.loc[out.device == "2-2", "timepoint"])
+
+
+def test_extend_still_catches_a_pinned_session_that_vanished(tmp_path):
+    """Extend relaxes *new* sessions only. A rebuild that lost one is still a fetch failure.
+
+    Reproduce mode must NOT get this check: staging a deliberate subset is its purpose.
+    """
+    _root, _df, pin_path = _full(tmp_path)
+    partial = tmp_path / "partial"
+    partial.mkdir()
+    _session(partial, "20260722", "2-2", [3, 5], peak_at=18)     # 2-3 and 2-2@t0 missing
+
+    with pytest.raises(PinMismatch, match="produced no rows at all"):
+        extract_dataset(partial, d0_normalize=False, pin=pin_path, pin_mode="extend")
+
+    # the same tree under reproduce is legitimate staged-subset use
+    ok = extract_dataset(partial, d0_normalize=False, pin=pin_path)
+    assert set(ok.loc[ok.device == "2-2", "timepoint"]) == {7.0}
+
+
+def test_pin_mode_is_validated_and_requires_a_pin(tmp_path):
+    root = tmp_path / "r"
+    root.mkdir()
+    _build_raw(root)
+    with pytest.raises(ValueError, match="pin_mode must be"):
+        extract_dataset(root, band=(10.0, 100_000.0), pin_mode="nonsense")
+    with pytest.raises(ValueError, match="only meaningful with pin="):
+        extract_dataset(root, band=(10.0, 100_000.0), pin_mode="extend")

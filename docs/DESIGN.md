@@ -120,7 +120,7 @@ Splitters are **forward-chained** (`t_val < t_test`, train on `[0, t_val−1]` /
 `[0, t_test−1]`). Nested CV: outer = evaluation, inner = hyperparameter + feature
 selection (incl. CARS's own K-fold). Never tune on the outer test fold.
 
-### 5.1 The baseline queue, why these 13 conditions
+### 5.1 The baseline queue, why these 14 conditions
 
 `baseline_queue()` is a **designed experiment, not a grid**: each batch changes exactly **one** factor
 from a common baseline (`baselines_1.2` = linear PLSR, global, no selector), so every result is a clean
@@ -143,16 +143,22 @@ scientific questions the study poses:
 - **Batch 2: track → B1 "global vs channel-specific".** `channelspecific_2.1` is the *same* architecture
   as 1.2 with only `track="channel"`, so 2.1-vs-1.2 is a clean read of sensor heterogeneity.
 - **Batch 3: feature selection (P ≫ N) → B2 "does selection help".** Holds linear/global fixed, varies
-  only the selector: `sr` and `smc` (PLS-importance filters bracketing the smooth↔sharp / noise-
-  sensitivity trade-off) and `cars` (a Monte-Carlo *wrapper* that searches subsets). Each is a
-  "beats the 1.2 baseline?" contrast; `threshold_grid=(0.5,1.0)` sweeps the SR/sMC cutoff.
+  only the selector: `sr`, `vip` and `smc` (PLS-importance filters) and `cars` (a Monte-Carlo
+  *wrapper* that searches subsets). Each is a "beats the 1.2 baseline?" contrast. The three filters
+  span the ways a PLS model can rank a feature: `sr` by how much of the feature the target-projected
+  loading explains, `vip` by the feature's weighted share of explained Y variance, `smc` by whether
+  the feature's association with the normalized regression vector is significant at all. They are
+  measurably distinct on real data, and the section on them in §10 explains why that took a
+  correction to achieve. `threshold_grid=(0.5,1.0)` sweeps the cutoff for the two ratio-valued
+  filters; sMC is scored as `-log10(p)` and uses `(2.0,6.0)`, which is the same pair of significance
+  levels at any fold size.
 - **Batch 4: transfer → B3 "generalize to new channels".** `newchannels_4.1` is the `universal` (LOCO)
   track with CARS, the hardest test (held-out sensor); selection is what lets a P ≫ N model generalize
   rather than overfit the training sensors.
 
 Every tool tracks a data property: collinear spectra + P ≫ N → the PLSR family (not OLS/ridge);
 heteroscedastic → weighted PLSR; multiplicative → log; nonlinear → poly; structured nuisance → O-PLS;
-P ≫ N → SR/sMC/CARS; new sensors → universal + selection. Kernel / multi-block / multi-level PLSR and
+P ≫ N → SR/VIP/sMC/CARS; new sensors → universal + selection. Kernel / multi-block / multi-level PLSR and
 mRMR / permutation selectors are registered extension points that **raise on use**, they trade away the
 interpretability that is the goal, and ~89 rows cannot support them. Because the queue is factorial-ish
 around one baseline, a single run answers B1 to B4 at once, read off
@@ -231,6 +237,35 @@ that is the default. An opt-in `detrend` removes a residual baseline slope but c
 broad-onset signal on channels whose faradaic response starts below the baseline window, so it
 is off by default. The switching-potential capacitive spike near 1.0 to 1.3 V is excluded by
 restricting to the anodic sweep and the dopamine window.
+
+**Selectivity ratio, VIP and sMC are three distinct filters, and keeping them distinct took
+care.** All three are built on target projection, so it is easy to write two of them that
+collapse onto one. `smc_scores` did: it regressed each feature on the target-projected score
+*with an intercept*, which recovers the loading and so recomputes the selectivity ratio,
+matching it to floating point (maximum relative difference 8e-15, rank correlation 1.000000)
+across random data, wide P > N, and every latent-variable count.
+
+The distinguishing vector is which one carries the decomposition. Selectivity ratio explains
+each feature with the loading obtained by projecting the data onto the target-projected score.
+sMC uses the **normalized regression vector** `b/||b||` directly, which is what makes it
+sharper and noisier, since it mixes predictive with orthogonal variation. `smc_scores` now
+forms the explained part as `outer(Xc @ b_hat, b_hat)` and returns the reference F statistic
+with (1, n - 2) degrees of freedom. Rank correlation against the selectivity ratio on real
+data is 0.39 at two components and 0.16 at three.
+
+**sMC is thresholded on significance, not on the raw statistic.** An F cutoff is not portable
+across folds, because F grows with residual degrees of freedom: at 2190 rows the 5% cutoff
+F(1, 2188) = 3.85 admits 136 of 143 features. `select("smc", ...)` therefore scores
+`-log10(p)` against F(1, n - 2), so a threshold of 2.0 means p <= 0.01 on a small fold and on
+a large one alike. The condition's threshold grid is `(2.0, 6.0)` in those units rather than
+the `(0.5, 1.0)` the ratio-valued filters use.
+
+sMC still selects far more features than the other two. On the study featureset the three
+filters keep, at their two grid cutoffs: selectivity ratio 41 and 31, VIP 35 and 28, sMC 135
+and 132. That is the statistic behaving as defined rather than a fault: an F test asks whether
+a feature associates with the target projection at all, and at this many rows nearly every one
+does. Read the sMC condition as a mild filter and the other two as aggressive ones; that
+contrast is part of what Batch 3 measures.
 
 **Model selection at small N is the dominant risk.** Selecting among many conditions on few
 folds overfits the selection itself, not just the model. This is why the outputs are framed as

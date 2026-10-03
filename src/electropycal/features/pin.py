@@ -236,26 +236,46 @@ def check_feature_columns(block: dict, columns) -> list[str]:
     return pinned
 
 
-def check_row_counts(block: dict, counts: dict) -> None:
+def check_row_counts(block: dict, counts: dict, allow_new: bool = False) -> None:
     """Validate per-session row counts against the pin.
 
     ``counts`` maps :func:`session_key` → rows produced. This is the check that catches a
     **partial data fetch**: a session missing its EIS file or its 0 nM background yields
     zero rows without raising anywhere else, so a staged extraction would otherwise
     produce a quietly smaller featureset that still looks well-formed.
+
+    ``allow_new=True`` permits sessions the pin has never seen, for the *extend* mode
+    described in :func:`~electropycal.features.extract.extract_dataset`: the run is
+    growing the featureset with later sessions rather than reproducing a fixed one, so an
+    unpinned session is the point of the exercise. Sessions the pin *does* record are
+    still checked, so a fetch that silently lost an existing session still fails.
     """
     pinned = block.get("sessions") or {}
     bad = []
     for key, value in sorted(counts.items()):
         got = value["n_rows"] if isinstance(value, dict) else value
         if key not in pinned:
+            if allow_new:
+                continue
             raise PinMismatch(
                 f"session {key!r} is absent from the pin (it records "
                 f"{len(pinned)} session(s)). Extracting a session the pin has never "
-                f"seen means these rows were never part of the pinned featureset.")
+                f"seen means these rows were never part of the pinned featureset. "
+                f"If you meant to grow the featureset, use pin_mode='extend'.")
         want = int(pinned[key]["n_rows"])
         if int(got) != want:
             bad.append((key, want, int(got)))
+    # Only in extend mode. In reproduce mode, staging a deliberate subset is the whole
+    # point, so pinned sessions being absent is expected, not a fault. In extend mode the
+    # caller is rebuilding the entire corpus, so a pinned session that vanished is a fetch
+    # failure that would otherwise just shrink the featureset.
+    vanished = sorted(set(pinned) - set(counts)) if allow_new else []
+    if vanished:
+        raise PinMismatch(
+            f"{len(vanished)} pinned session(s) produced no rows at all: "
+            f"{vanished[:8]}{'; ...' if len(vanished) > 8 else ''}. They are recorded in "
+            f"the pin but absent from this extraction, so the featureset would shrink "
+            f"silently. The usual cause is an incomplete fetch.")
     if bad:
         detail = "; ".join(f"{k}: pinned {w} rows, got {g}" for k, w, g in bad[:8])
         raise PinMismatch(

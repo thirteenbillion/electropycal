@@ -8,6 +8,7 @@ before numpy-heavy work to keep joblib fold-parallelism from oversubscribing.
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from .discovery.scheduler import pin_blas_single_threaded
@@ -54,6 +55,11 @@ def _resolve_cli_band(root, band):
     """
     if not isinstance(band, str):
         return (float(band[0]), float(band[1]))
+    # Validate here, not only in extract_dataset. This function is passed as an ARGUMENT to
+    # extract_dataset, so Python evaluates it first: the corpus pre-pass below would other-
+    # wise still be the first thing to touch the path, which is the whole original bug.
+    from .data.paths import validate_raw_root
+    validate_raw_root(root, "--raw")
     from .data.inventory import recommended_band
     lo, hi = recommended_band(root)
     print(f"--band auto -> ({lo:.0f}, {hi:.0f}) Hz  (data-driven, from {root}); "
@@ -63,6 +69,7 @@ def _resolve_cli_band(root, band):
 
 def _load_frame(source: str, progress: bool = False, band="auto", n_jobs: int = 1):
     """Resolve a data source to a per-dose featureset DataFrame."""
+    source = _resolve_raw(source)
     if source == "synthetic":
         import pandas as pd
         from .data.synthetic import make_dataset
@@ -71,7 +78,13 @@ def _load_frame(source: str, progress: bool = False, band="auto", n_jobs: int = 
         df["channel"] = ds.channel; df["timepoint"] = ds.timepoint
         df["concentration"] = ds.concentration; df["NormIpeak"] = ds.y
         return df
-    if Path(source).is_dir():
+    # Validate before anything infers. `--band auto` runs a full-corpus percentile pre-pass,
+    # so an unchecked bad path surfaced as a FileNotFoundError from inside the band
+    # calculation, naming neither the flag nor the mistake.
+    from .data.paths import validate_data_path, validate_raw_root
+    src = validate_data_path(source)
+    if src.is_dir():
+        validate_raw_root(source, "the data directory")
         from .features.extract import extract_dataset
         return extract_dataset(source, band=_resolve_cli_band(source, band),
                                n_jobs=n_jobs, progress=progress)
@@ -97,8 +110,30 @@ def _load_data(source: str, progress: bool = False, band="auto", target: str = "
     return RunData.from_frame(_load_frame(source, progress=progress, band=band, n_jobs=n_jobs))
 
 
+#: Sentinel accepted anywhere a raw corpus path is taken. Resolves to the bundled demo
+#: tree if one is reachable and to a freshly synthesized equivalent otherwise, so the first
+#: command in the README runs from a bare ``pip install`` with no checkout. A literal
+#: directory named ``demo`` is NOT what a user means here: in a checkout the real tree is
+#: ``demo/in_vitro/input``, so treating the word as a path would fail in exactly the place
+#: it most needs to work.
+DEMO_SENTINEL = "demo"
+
+
+def _resolve_raw(value: str, kind: str = "in_vitro") -> str:
+    """Expand the ``demo`` sentinel; pass any other value through untouched."""
+    if str(value) != DEMO_SENTINEL:
+        return value
+    from ._demo import demo_input
+    resolved = demo_input(kind)
+    print(f"--raw demo -> {resolved}")
+    return resolved
+
+
 def _extract(args) -> None:
+    from .data.paths import validate_raw_root
     from .features.extract import extract_dataset
+    args.raw = _resolve_raw(args.raw)
+    validate_raw_root(args.raw, "--raw")        # also covers an explicit --band lo,hi
     df = extract_dataset(args.raw, band=_resolve_cli_band(args.raw, args.band),
                          peak_method=args.peak_method, detrend=args.detrend,
                          acceptance=args.acceptance, min_norm_snr=args.min_norm_snr,
@@ -224,7 +259,10 @@ def main(argv=None) -> None:
     sub = parser.add_subparsers(dest="command", required=True)
 
     e = sub.add_parser("extract", help="build a featureset from a raw PSTrace export directory")
-    e.add_argument("--raw", required=True, help="root directory of <date>_<devicetype>_signal folders")
+    e.add_argument("--raw", required=True,
+                   help="root directory of <date>_<devicetype>_signal folders, or the "
+                        "literal word 'demo' for the bundled demo tree (synthesized if "
+                        "this install has no copy of it)")
     e.add_argument("--out", default="featureset_extracted.parquet")
     e.add_argument("--band", type=_parse_band, default="auto",
                    help="EIS analysis band: 'auto' (default, data-driven upper bound below the "
@@ -260,7 +298,8 @@ def main(argv=None) -> None:
 
     d = sub.add_parser("discover", help="run the model-discovery queue")
     d.add_argument("--data", default="synthetic",
-                   help="'synthetic', a featureset parquet/csv, or a raw PSTrace directory")
+                   help="'synthetic', 'demo', a featureset parquet/csv, or a raw PSTrace "
+                        "directory")
     d.add_argument("--band", type=_parse_band, default="auto",
                    help="EIS analysis band when --data is a raw directory: 'auto' (default, "
                         "data-driven) or 'lo,hi' in Hz. Ignored for a featureset/synthetic --data")
@@ -316,7 +355,22 @@ def main(argv=None) -> None:
     c.set_defaults(func=_features)
 
     args = parser.parse_args(argv)
-    args.func(args)
+
+    # A user mistake should read as one sentence, not a traceback. These exceptions all
+    # carry a message written for a person: the path they gave, what was wrong with it, and
+    # what to do instead. A stack trace above that adds nothing and buries it. Anything
+    # NOT in this tuple is a bug in the library and keeps its traceback, which is what a
+    # traceback is for.
+    from .data.paths import NoSessionFolders, NotAFilesystemPath, PathNotFound
+    from .data.pstrace import PSTraceFormatError
+    from .stabreview import NoStabilizationFiles
+    expected = (PathNotFound, NotAFilesystemPath, NoSessionFolders,
+                PSTraceFormatError, NoStabilizationFiles)
+    try:
+        args.func(args)
+    except expected as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise SystemExit(2) from None
 
 
 if __name__ == "__main__":

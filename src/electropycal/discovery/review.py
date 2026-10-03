@@ -13,6 +13,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from .. import viz
 
 
 def _tp_label(tp) -> str:
@@ -21,6 +22,7 @@ def _tp_label(tp) -> str:
 
 def plot_condition_ranking(run_dir, show: bool = True) -> pd.DataFrame:
     """Horizontal bar of pooled RMSEP (95% CI) per condition (best at bottom). Returns the ranking frame."""
+    viz.ensure_style()
     import matplotlib.pyplot as plt
     run_dir = Path(run_dir)
     cr = pd.read_parquet(run_dir / "report" / "condition_ranking.parquet").dropna(subset=["pooled_rmsep"])
@@ -30,12 +32,13 @@ def plot_condition_ranking(run_dir, show: bool = True) -> pd.DataFrame:
     ax.set_xlabel("pooled RMSEP (95% CI)"); ax.set_title("Condition ranking (best at bottom)")
     plt.tight_layout()
     if show:
-        plt.show()
+        viz.emit("review_condition_ranking")
     return cr
 
 
 def plot_fold_spread(run_dir, show: bool = True):
     """Box plot of per-fold RMSEP per condition (ordered by median)."""
+    viz.ensure_style()
     import matplotlib.pyplot as plt
     run_dir = Path(run_dir)
     sm = pd.read_parquet(run_dir / "summary.parquet")
@@ -46,11 +49,12 @@ def plot_fold_spread(run_dir, show: bool = True):
     ax.set_ylabel("per-fold RMSEP"); ax.set_title("Fold-level spread per condition")
     plt.tight_layout()
     if show:
-        plt.show()
+        viz.emit("review_fold_spread")
 
 
 def plot_feature_ranking(run_dir, top: int = 15, show: bool = True) -> pd.DataFrame:
     """Horizontal bar of the top-``top`` features by cross-condition mean selection frequency."""
+    viz.ensure_style()
     import matplotlib.pyplot as plt
     run_dir = Path(run_dir)
     fr = pd.read_parquet(run_dir / "report" / "feature_ranking.parquet").head(top)
@@ -59,7 +63,7 @@ def plot_feature_ranking(run_dir, top: int = 15, show: bool = True) -> pd.DataFr
     ax.set_xlabel("mean selection frequency across conditions"); ax.set_title("Top features")
     plt.tight_layout()
     if show:
-        plt.show()
+        viz.emit("review_feature_ranking")
     return fr
 
 
@@ -67,6 +71,7 @@ def plot_calibration_review(run_dir, condition: str | None = None, show: bool = 
     """Calibration (true vs predicted by timepoint), parity, and a 6-panel residual diagnostic for one
     condition (default: best-ranked). Prints RMSEP slices + a heteroscedasticity indicator; returns the
     held-out predictions frame."""
+    viz.ensure_style()
     import matplotlib.pyplot as plt
     run_dir = Path(run_dir)
     cr = pd.read_parquet(run_dir / "report" / "condition_ranking.parquet").dropna(subset=["pooled_rmsep"])
@@ -91,7 +96,7 @@ def plot_calibration_review(run_dir, condition: str | None = None, show: bool = 
     ax.set_title(f"{cond}\ncalibration: true (mean +/- s.d. across sensors) vs predicted, by timepoint")
     ax.legend(fontsize=6, ncol=2); plt.tight_layout()
     if show:
-        plt.show()
+        viz.emit("review_calibration_review_1")
 
     fig, ax = plt.subplots(figsize=(4.4, 4.1))
     sc = ax.scatter(P.y_true, P.y_pred, c=np.log10(P.concentration), cmap="plasma", s=14, alpha=0.75)
@@ -99,7 +104,7 @@ def plot_calibration_review(run_dir, condition: str | None = None, show: bool = 
     ax.plot(lim, lim, "k--", lw=0.8); ax.set_xlabel("true NormIpeak"); ax.set_ylabel("predicted NormIpeak")
     ax.set_title("predicted vs true (parity)"); fig.colorbar(sc, ax=ax, label="log10 conc"); plt.tight_layout()
     if show:
-        plt.show()
+        viz.emit("review_calibration_review_2")
 
     r = P.residual.to_numpy()
     fig, axs = plt.subplots(2, 3, figsize=(13, 6.6))
@@ -120,7 +125,7 @@ def plot_calibration_review(run_dir, condition: str | None = None, show: bool = 
     axs[1, 2].set_xticklabels(devs, fontsize=7); axs[1, 2].set_xlabel("device"); axs[1, 2].set_title("by device")
     fig.suptitle(f"{cond} — residual diagnostics", y=1.01); plt.tight_layout()
     if show:
-        plt.show()
+        viz.emit("review_calibration_review_3")
 
     het = float(np.corrcoef(np.abs(P.y_pred), np.abs(r))[0, 1]) if len(P) > 2 else float("nan")
     print("RMSEP by concentration:", {float(k): round(v, 3) for k, v in P.groupby("concentration").residual.apply(rmse).items()})
@@ -134,6 +139,7 @@ def plot_target_framing_comparison(featureset: pd.DataFrame, include_interaction
                                    show: bool = True) -> pd.DataFrame:
     """Compare target framings (NormIpeak vs sensitivity vs …) on a featureset: per-dose RMSEP and
     concentration-recovery error. Returns the comparison frame."""
+    viz.ensure_style()
     import matplotlib.pyplot as plt
     from ..evaluation.framing import compare_target_framings
     cmp = compare_target_framings(featureset, include_interaction=include_interaction)
@@ -153,5 +159,5 @@ def plot_target_framing_comparison(featureset: pd.DataFrame, include_interaction
         a.tick_params(axis="x", rotation=20)
     plt.tight_layout()
     if show:
-        plt.show()
+        viz.emit("review_target_framing_comparison")
     return cmp

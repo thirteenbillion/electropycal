@@ -45,22 +45,28 @@ registered extension points that raise on use. See `docs/DESIGN.md`.
 ```bash
 pip install electropycal
 
-# Build a featureset from a raw PSTrace export directory.
-electropycal extract --raw <pstrace_dir> --out featureset.parquet
+# Build a featureset. `demo` is a synthetic dataset, so this runs before you have
+# data of your own; swap it for your own PSTrace export directory when you do.
+electropycal extract --raw demo --out featureset.parquet
 
 # Rank candidate recalibration models.
 electropycal discover --data featureset.parquet --profile full
 
-# Recalibrate new in-vivo data with a frozen model.
+# Freeze the selected model on all of the in-vitro data.
+electropycal freeze --run outputs/model_discovery_<timestamp> --data demo     --out outputs/frozen_model
+
+# Recalibrate new in-vivo data with it.
 electropycal deploy --model outputs/frozen_model --data invivo.parquet
 ```
 
-A synthetic demo dataset ships with the package under `demo/`, so every command and notebook
-runs before you have data of your own:
+`--raw demo` and `--data demo` resolve the bundled synthetic dataset, and synthesize an
+equivalent one if this install has no copy of it, so the commands above run from nothing but
+`pip install`. Note `--profile full` is a real run: budget a couple of hours. Use
+`--profile fast` to see the pipeline work end to end in under a minute.
 
-```bash
-electropycal extract --raw demo/in_vitro/input --out featureset.parquet
-```
+The repo also ships a Claude skill for in-chat analysis at
+`.claude/skills/lab-analysis/`, which Claude Code picks up automatically in a clone: no
+install step, just ask it for a stat or a figure against your data.
 
 ### Two things worth knowing up front
 

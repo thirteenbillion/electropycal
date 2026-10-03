@@ -1,6 +1,8 @@
 """RawSpectraIndex + plot functions (folded from the raw_spectra_review notebook)."""
 
+import shutil
 import tempfile
+from pathlib import Path
 
 import matplotlib
 matplotlib.use("Agg")
@@ -68,3 +70,40 @@ def test_all_plots_and_tables_run(idx):
         rs.plot_vs_time(idx, dev, k); plt.close("all")
     assert len(rs.dose_stats_table(idx, idx.devices())) > 0
     assert len(rs.edge_pinning_table(idx, idx.devices())) > 0
+
+
+def test_available_table_without_a_0nM_background_raises_naming_the_tree(tmp_path):
+    """A tree can hold signal files and still build no session rows.
+
+    ``available_table`` is keyed off 0 nM FSCV backgrounds alone, so EIS plus dosed FSCV
+    clears the "any signal file" guard and then produces nothing. Left unguarded that
+    surfaced as ``KeyError: 'device'`` from inside ``sort_values`` on a column-less frame,
+    naming neither the tree nor the missing file.
+    """
+    sess = tmp_path / "20260915_neurostring_signal"
+    sess.mkdir()
+    full = write_synthetic_pstrace_dir(tempfile.mkdtemp())
+    src = next(iter(sorted(Path(full).rglob("*_eis_0nM.csv"))))
+    dosed = sorted(Path(full).rglob("*_fscv_100nM.csv"))
+    dev = rs.parse_filename(src.name)["deviceid"]
+    shutil.copy2(src, sess / f"{dev}_eis_0nM.csv")
+    if dosed:
+        shutil.copy2(dosed[0], sess / f"{dev}_fscv_100nM.csv")
+
+    idx = rs.RawSpectraIndex(str(tmp_path))
+    assert len(idx.signal) > 0, "fixture must clear the any-signal-file guard"
+    with pytest.raises(rs.NoSignalSessions) as ei:
+        idx.available_table()
+    msg = str(ei.value)
+    assert str(tmp_path) in msg
+    assert "0 nM FSCV" in msg
+    assert "fscv_0nM.csv" in msg            # names what to add
+    assert "found by type" in msg           # and what it did find
+
+
+def test_available_table_still_returns_empty_frame_for_an_empty_tree(tmp_path):
+    """An empty tree is a different situation and must not raise: columns, no rows."""
+    (tmp_path / "20260915_neurostring_signal").mkdir()
+    tbl = rs.RawSpectraIndex(str(tmp_path)).available_table()
+    assert len(tbl) == 0
+    assert list(tbl.columns) == ["device", "date", "timepoint", "n_channels", "channels"]

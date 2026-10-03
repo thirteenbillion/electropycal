@@ -8,6 +8,8 @@ defaults. ``RunData`` is the post-extraction featureset the runner consumes.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -49,6 +51,14 @@ class RunData:
 
     @classmethod
     def from_frame(cls, df, target: str = "NormIpeak") -> "RunData":
+        # A path here is a common slip, and pandas' own error for it is unhelpful. Named
+        # explicitly because the fix (read it yourself first) is not obvious from the type.
+        if isinstance(df, (str, Path)):
+            raise TypeError(
+                f"from_frame takes a DataFrame, not a path ({df!r}). Read it first:"
+                f"\n    import pandas as pd"
+                f"\n    RunData.from_frame(pd.read_parquet({str(df)!r}))"
+                f"\nOr use electropycal.cli._load_data, which accepts either.")
         """Build from a featureset DataFrame. Reserved columns: ``channel``,
         ``timepoint``, ``concentration``, ``NormIpeak`` (+ optional ``device``);
         every other column is a feature.
@@ -198,8 +208,14 @@ def baseline_queue() -> list[Condition]:
         Condition("channelspecific_2.1_linearPLSR", "linear_plsr", "channel", None, k_grid=(2, 3)),
         Condition("pNproblem_3.1_SR", "linear_plsr", "global", "sr",
                   k_grid=(2, 3), threshold_grid=(0.5, 1.0)),
-        Condition("pNproblem_3.1_sMC", "linear_plsr", "global", "smc",
+        Condition("pNproblem_3.1_VIP", "linear_plsr", "global", "vip",
                   k_grid=(2, 3), threshold_grid=(0.5, 1.0)),
+        # sMC is scored as -log10(p), so its thresholds are significance levels rather than
+        # the 0.5/1.0 scale SR and VIP use: 2.0 is p <= 0.01 and 6.0 is p <= 1e-6. Expect it
+        # to select most features on a large corpus, because the F test asks whether each
+        # feature is associated with the target projection and almost all of them are.
+        Condition("pNproblem_3.1_sMC", "linear_plsr", "global", "smc",
+                  k_grid=(2, 3), threshold_grid=(2.0, 6.0)),
         Condition("pNproblem_3.2_CARS", "linear_plsr", "global", "cars", k_grid=(2, 3)),
         Condition("newchannels_4.1_CARS", "linear_plsr", "universal", "cars", k_grid=(2, 3)),
     ]
