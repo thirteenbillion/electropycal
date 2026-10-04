@@ -8,11 +8,11 @@ Compares, on identical forward-chained-over-timepoints splits:
 
 on two metrics: the common **per-dose NormIpeak RMSEP** (``sensitivity`` reconstructs NormIpeak from
 its predicted slope+intercept), and **concentration recovery** (invert each calibration to estimate
-log10[DA] from the measured NormIpeak — the actual recalibration use). ``current`` is flat, so it has
+log10[DA] from the measured NormIpeak, the actual recalibration use). ``current`` is flat, so it has
 no calibration slope and cannot recover concentration.
 
 This is a **light, self-contained diagnostic** (plain sklearn PLS, no feature selection / bootstrap),
-meant to help pick a framing — not to reproduce a full discovery run's numbers.
+meant to help pick a framing, not to reproduce a full discovery run's numbers.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ def _zfit(X):
     """Train-only Z-score statistics, NaN-tolerant.
 
     ``nanmean``/``nanstd`` so a sparse missing cell does not poison the whole column; apply
-    with :func:`_zapply`, which sends anything still non-finite to 0.0 — i.e. to the training
+    with :func:`_zapply`, which sends anything still non-finite to 0.0, i.e. to the training
     mean. Same idiom as ``evaluation.hierarchical`` / ``stratify`` / ``classify``.
     """
     m, s = np.nanmean(X, 0), np.nanstd(X, 0)
@@ -63,7 +63,7 @@ def _pls(Xtr, Ytr, Xte, k):
 def _invert_quad(a, b, c, y, x_ref):
     """Solve ``a + b·x + c·x² = y`` for x (log-conc); pick the root nearest ``median(x_ref)``.
 
-    ``x_ref`` must be a reference available **at prediction time** — the training dose grid.
+    ``x_ref`` must be a reference available **at prediction time**: the training dose grid.
     Passing the held-out group's own true log-concentrations (as this did) uses the quantity
     being recovered to choose between the two roots, which flatters
     ``conc_recovery_rmse_log10``. The dose grid a calibration was built over is legitimate

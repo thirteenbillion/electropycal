@@ -77,7 +77,7 @@ def test_recommended_band_defaults_when_capacitive(tmp_path):
 
 def _write_onset_eis(path, onset_by_ch, grid=(10.0, 100.0, 1000.0, 10_000.0, 100_000.0)):
     # minimal EIS export: each channel is capacitive (Im<0) below its onset and inductive
-    # (Im>=0, i.e. stored Z''<=0) at/above it — so inductive_onset(ch) == onset_by_ch[ch].
+    # (Im>=0, i.e. stored Z''<=0) at/above it, so inductive_onset(ch) == onset_by_ch[ch].
     L = ["Date and time:,2025-01-01 00:00:00", "Notes:", "Measurement:,Impedance Spectroscopy",
          "Notes:,", "Date and time:,2025-01-01"]
     for ch, onset in onset_by_ch.items():
@@ -181,7 +181,7 @@ def test_channel_quality_report_progress_logs_without_changing_results(tmp_path,
 
 
 def test_channel_quality_report_parallel_matches_serial(tmp_path):
-    """n_jobs>1 QCs sessions in parallel worker processes but must be byte-identical to serial —
+    """n_jobs>1 QCs sessions in parallel worker processes but must be byte-identical to serial:
     the sessions are independent (every channel kept, no shared ref_grid) and rows are
     concatenated in sorted-session order."""
     import pandas as pd

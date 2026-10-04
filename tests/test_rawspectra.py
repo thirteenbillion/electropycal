@@ -83,8 +83,8 @@ def test_available_table_without_a_0nM_background_raises_naming_the_tree(tmp_pat
     sess = tmp_path / "20260915_neurostring_signal"
     sess.mkdir()
     full = write_synthetic_pstrace_dir(tempfile.mkdtemp())
-    src = next(iter(sorted(Path(full).rglob("*_eis_0nM.csv"))))
-    dosed = sorted(Path(full).rglob("*_fscv_100nM.csv"))
+    src = next(iter(sorted(Path(full).rglob("*_eis_0n[mM].csv"))))
+    dosed = sorted(Path(full).rglob("*_fscv_100n[mM].csv"))
     dev = rs.parse_filename(src.name)["deviceid"]
     shutil.copy2(src, sess / f"{dev}_eis_0nM.csv")
     if dosed:

@@ -6,7 +6,7 @@ from a script, the CLI, or another session without re-deriving anything.
 
 Two pieces:
 
-- :class:`RawSpectraIndex` — a filename-only index of a data ``ROOT`` (device / date / timepoint /
+- :class:`RawSpectraIndex`: a filename-only index of a data ``ROOT`` (device / date / timepoint /
   signaltype / dose / path, no waveform reads up front) plus cached, replicate-averaged trace loaders
   (EIS spectra, FSCV raw / background-subtracted / normalized cycles, per-replicate peak stats). All
   processing knobs (replicates, peak method, Savitzky-Golay smoothing, band) come from the
@@ -273,7 +273,7 @@ class RawSpectraIndex:
         return anodic_sweep(sig[0], y) if anodic_only else (sig[0], y)
 
     def fscv_norm(self, dev, tp, ch, dose, smooth_window=0, anodic_only=False):
-        """Background-normalized cycle ``(i − i_bg) / i_bg`` — the NormIpeak-normalized loop."""
+        """Background-normalized cycle ``(i − i_bg) / i_bg``, the NormIpeak-normalized loop."""
         sig = self.fscv_raw(dev, tp, ch, dose)
         if sig is None:
             return None
@@ -513,13 +513,13 @@ def plot_fscv_loops(idx: RawSpectraIndex, dev, transform="bgsub", concs=None, sh
     """FSCV cycles per concentration: channels as panels, timepoints overlaid.
     ``transform ∈ {'raw','bgsub','norm'}``. The located peak is dotted.
 
-    - ``show_window`` — x-range drawn (default full ``(0.0, 1.0)`` V). ``scale_window`` (a sub-window) is
+    - ``show_window``: x-range drawn (default full ``(0.0, 1.0)`` V). ``scale_window`` (a sub-window) is
       what the y-axis autoscales to, so context can be shown past the peak while the y-scale frames it.
     - ``anodic_only`` (default True, bgsub/norm) draws only the rising sweep. Set ``anodic_only=False``
-      to draw the **full loop (anodic + cathodic together)** — then widen ``show_window`` to see all
+      to draw the **full loop (anodic + cathodic together)**, then widen ``show_window`` to see all
       currents (raw loops always show the full cycle).
-    - ``mark_clipped`` (default **off** — too busy at scale) marks an **edge-clipped** peak (lobe
-      truncated by the sweep edge → ``peak_area`` under-estimate) with a red ✕. The clip is always
+    - ``mark_clipped`` (default **off**: too busy at scale) marks an **edge-clipped** peak (lobe
+      truncated by the sweep edge → ``peak_area`` under-estimate) with a red x. The clip is always
       recorded on the extracted ``peak_area_clipped`` column regardless of this flag."""
     viz.ensure_style()
     from matplotlib.lines import Line2D
@@ -707,7 +707,7 @@ def plot_vpeak_vs_conc(idx: RawSpectraIndex, dev, timepoints=None):
 
 
 def onset_table(idx: RawSpectraIndex, devices, timepoints=None) -> pd.DataFrame:
-    """Inductive-onset frequency per (device, channel, timepoint) — with a ``devicetype`` column."""
+    """Inductive-onset frequency per (device, channel, timepoint), with a ``devicetype`` column."""
     rows = []
     for dev in devices:
         for ch in idx.eis_channels(dev):

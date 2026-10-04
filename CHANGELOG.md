@@ -5,6 +5,49 @@ means what semver says it means: **the public API may change in a minor release.
 version if you depend on it. 1.0.0 will be a deliberate act, once the surface has stopped
 moving, not a scheduled follow-up.
 
+## 0.11.1
+
+A correction release: the documentation checked against the code, one crash fixed, and the
+build made reproducible from a clone for as long as the release exists.
+
+### Fixed: `electropycal discover --help` could crash on Windows
+
+Help text containing a character outside the Windows ANSI codepage made `discover --help`
+exit with `UnicodeEncodeError` whenever its output was piped or redirected. The CLI help is
+now plain ASCII, and the command line replaces any character the output stream cannot
+encode instead of failing, so no message can crash a command.
+
+### Added: `python -m electropycal`
+
+The same command line as the `electropycal` console script, for environments where the
+script directory is not on `PATH`.
+
+### Changed: plain punctuation in everything the library prints
+
+Docstrings, comments, log lines, warnings, error messages, plot titles and the notebooks use
+colons, commas, semicolons and parentheses where they used dashes. If you match a message's
+text exactly, check it. One displayed value changed: `overview.conditions_table` shows
+`none` in the selector column for a condition with no selector.
+
+### Documentation
+
+`REFERENCE.md`, `USAGE.md`, `DESIGN.md`, `RUNNING_AT_SCALE.md` and the README were checked
+against the code. Corrected: signatures and defaults (`norm_ipeak`, `extract_dataset`,
+`run_discovery`, `run_condition`, `freeze_model`, `freeze_top`, `recalibrate_invivo`,
+`eis_global_features`), the CLI flags each subcommand takes, the run-directory and frozen-model
+layouts, the extraction pin and `pin_mode`, the demo-dataset README, and which selectors are
+implemented (mRMR and a permutation `t_max` filter are described, not implemented).
+`REFERENCE.md` now says what the code does about the modelling target: `normipeak` is the
+default, and `sensitivity` is the recommended recalibration target, passed explicitly.
+`RUNNING_AT_SCALE.md` no longer claims a sweep resumes after an interruption; it does not.
+
+### Build
+
+The build backend is pinned exactly (`hatchling==1.32.4`), since the wheel records the
+version that built it. A continuous-integration workflow runs the suite on Python 3.11 to
+3.13, installs the published package on Linux, Windows and macOS and runs the quick start,
+and on every release tag rebuilds the tree and checks it against the files PyPI serves.
+
 ## 0.11.0
 
 ### Changed: a condition writes two fold files, not four per fold
@@ -162,7 +205,8 @@ a no-op and a plotting call reported success having produced nothing.
   so adding a session to a corpus was an error and an incremental rebuild had to run
   unpinned, re-deriving the band, `device_d0` and the reference grid from whatever happened
   to be present. `extend` holds every pinned anchor and admits new sessions.
-- `smc_significance`, and `selection` now offers VIP as a third PLS-importance filter.
+- `smc_significance`, and a VIP condition in the baseline queue, `pNproblem_3.1_VIP`, as a
+  third PLS-importance filter beside SR and sMC.
 - Path errors are importable: `data.paths.PathNotFound`, `NotAFilesystemPath`,
   `NoSessionFolders`. Ingestion errors: `data.pstrace.PSTraceFormatError`.
 
@@ -230,5 +274,5 @@ back would have meant shipping a library that could not do the thing it exists t
   so running the review modules from a script or in CI completes and produces nothing.
 - `Kd` is unidentifiable on non-saturating data, so the saturating targets (`sat_*`, `hill_*`)
   are off by default.
-- Kernel, multi-block and multi-level PLSR, and the mRMR and permutation-`t_max` selectors,
-  are registered extension points that raise on use.
+- Kernel, multi-block and multi-level PLSR are registered extension points that raise on use.
+  The mRMR and permutation-`t_max` selectors are documented extension points, not implemented.

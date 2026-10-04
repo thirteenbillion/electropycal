@@ -1,16 +1,17 @@
-"""Drift-beyond-trust classifier (study experiment E5) — the pragmatic pivot.
+"""Drift-beyond-trust classifier: the pragmatic pivot.
 
 Regressing the exact drifted sensitivity from leakage-safe electrode state did not generalize
-out-of-sample (E0-E4). A coarser, genuinely-useful question may still be answerable: **can the
-electrode state flag when a sensor has drifted past the point of trusting its frozen calibration?**
+out-of-sample in any regression design. A coarser, genuinely-useful question may still be
+answerable: **can the electrode state flag when a sensor has drifted past the point of trusting
+its frozen calibration?**
 That is a binary classification (usable / degraded), a much easier target than the exact value, and
 it is what a deployment actually needs (know when to stop trusting a channel).
 
 Label: per sensor, take the baseline (earliest-timepoint) sensitivity; a later ``(sensor, timepoint)``
 is **degraded** if its sensitivity has moved more than ``frac`` (fractional change) from that baseline
-— drift in *either* direction breaks a frozen calibration. Predictors: the same D0-normalized EIS +
+(drift in *either* direction breaks a frozen calibration). Predictors: the same D0-normalized EIS +
 background features. Evaluation: forward-chained (train on earlier timepoints), pooled ROC-AUC +
-balanced accuracy — deployment-faithful, same as the regression tracks.
+balanced accuracy (deployment-faithful, same as the regression tracks).
 """
 
 from __future__ import annotations

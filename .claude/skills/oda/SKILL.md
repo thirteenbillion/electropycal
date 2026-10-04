@@ -1,5 +1,5 @@
 ---
-name: lab-analysis
+name: oda
 description: Run a data analysis or make a plot against a lab dataset held in cloud storage, in chat, using the project's own published analysis library — or decide the request is too heavy for chat and launch it as an unattended cloud job instead. Use this whenever someone asks for a quick stat, trend, figure, or extraction from their lab or study data; attaches a featureset, parquet, CSV or instrument export and asks what it shows; asks for a publication-ready or paper-ready figure; asks to re-extract or refresh a dataset; asks whether an analysis should run here or be launched as a sweep/job/workflow; or pastes a cloud-storage link and asks to analyse what is behind it. Also use it when someone asks for a plot the analysis library has no preset for — combining the library with general tools is the intended route, not a workaround.
 ---
 

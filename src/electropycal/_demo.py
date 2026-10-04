@@ -4,7 +4,7 @@
 (same convention as :mod:`electropycal._parallel`): it is scaffolding so the shipped
 notebooks have something to open, not a path API anyone should build on. It lives
 *inside the package* rather than next to the notebooks because in Colab the notebook is
-uploaded on its own and the pip-installed wheel is the only thing present — a sibling
+uploaded on its own and the pip-installed wheel is the only thing present; a sibling
 ``notebooks/_demo.py`` would not be importable there.
 
 The problem it solves: every public notebook used to hardcode ``ROOT =
@@ -17,14 +17,14 @@ fail from the repo root, from VS Code with a workspace-root cwd, and in Colab.
 So nothing here counts parent directories. Candidate roots are probed in order and each
 is accepted only if the tree it should contain is really there:
 
-1. ``$ELECTROPYCAL_DEMO`` — explicit override, for CI or an unpacked release.
-2. the current working directory and each of its ancestors — covers the repo root,
+1. ``$ELECTROPYCAL_DEMO``: explicit override, for CI or an unpacked release.
+2. the current working directory and each of its ancestors: covers the repo root,
    ``notebooks/``, ``publish/``, and anywhere else inside a checkout.
-3. the installed package's own location — covers an editable/src-layout install driven
+3. the installed package's own location: covers an editable/src-layout install driven
    from an unrelated cwd. A wheel install has no demo tree next to it, so this simply
    does not match, which is the correct answer rather than a wrong guess.
 
-If none match — the ordinary Colab case, where there is no checkout at all —
+If none match (the ordinary Colab case, where there is no checkout at all),
 :func:`demo_input` synthesizes an equivalent tree instead of failing.
 """
 
@@ -91,7 +91,7 @@ def find_demo_tree(kind: str = "in_vitro") -> Path | None:
 
 
 def _searched_report(kind: str) -> str:
-    """Human-readable account of what was looked for and where — never a bare errno."""
+    """Human-readable account of what was looked for and where, never a bare errno."""
     rels = " or ".join(str(r) for r in _relative_targets(kind))
     lines = [f"could not find the shipped demo tree for kind={kind!r}.",
              f"  looked for : {rels}",

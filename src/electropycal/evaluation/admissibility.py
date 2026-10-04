@@ -1,19 +1,19 @@
-"""Target-admissibility screen (study experiment A2) — pick the default target WITHOUT Q².
+"""Target-admissibility screen: pick the default target WITHOUT Q².
 
 When no configuration achieves out-of-sample Q²>0, Q² cannot rank candidate targets (comparing noise to
-noise). The default modeling target is instead locked by **admissibility** — four properties of the target
+noise). The default modeling target is instead locked by **admissibility**: four properties of the target
 itself, each measurable with no model:
 
-- **identifiability** — the fraction of sensor-timepoints where the target is estimable (a finite fit from
+- **identifiability**: the fraction of sensor-timepoints where the target is estimable (a finite fit from
   the doses that sensor-timepoint actually has). An often-unidentifiable target (e.g. Langmuir ``Kd`` on
   non-saturating data) is disqualified here, no Q² needed.
-- **invertibility** — whether the target, as a calibration model, is monotone and can be inverted to
+- **invertibility**: whether the target, as a calibration model, is monotone and can be inverted to
   recover concentration (what recalibration ultimately needs). A dose-response *slope* or Freundlich
   *exponent* is invertible; a signed *curvature* or *intercept* alone is not (it is a shape/level
   covariate, not a standalone recalibration target).
-- **dynamic range** — how much the target actually varies across sensor-timepoints (std and coefficient of
+- **dynamic range**: how much the target actually varies across sensor-timepoints (std and coefficient of
   variation). A target that barely moves is unpredictable *by definition*, independent of any model.
-- **reliability** — a fit-quality proxy (median dose-response correlation ``dose_response_r``): is the
+- **reliability**: a fit-quality proxy (median dose-response correlation ``dose_response_r``): is the
   target estimated from well-behaved dose-responses, or is it itself noise?
 
 ``target_admissibility`` returns one row per candidate with these columns and an ``admissible`` flag, so

@@ -3,10 +3,10 @@
 Parses a PSTrace potentiostat export (UTF-16, CRLF) into structured raw FSCV and
 EIS data. Two block layouts observed in real exports:
 
-- **FSCV** — horizontal blocks on one header row, each labelled
+- **FSCV**: horizontal blocks on one header row, each labelled
   ``Fast Cyclic Voltammetry: FCV i vs E Channel N [rep]`` and occupying two columns
   ``(V, µA)`` = (voltage, current). ``[rep]`` marks replicate cycles (absent = 0).
-- **EIS** — vertical blocks, each headed ``CH N: Fixed at K freqs`` followed by a
+- **EIS**: vertical blocks, each headed ``CH N: Fixed at K freqs`` followed by a
   column-name row (``freq / Hz``, ``neg. Phase / °``, ``Idc / uA``, ``Z / Ohm``,
   ``Z' / Ohm``, ``Z'' / Ohm``, ``Cs / F``) and ``K`` data rows. The ``Z''`` column holds
   ``-Im(Z)`` and is **negated on ingest** to match ``features.eis``'s ``Im(Z) < 0`` convention
@@ -15,16 +15,16 @@ EIS data. Two block layouts observed in real exports:
 A single export corresponds to one device. Measurement protocol / timepoint /
 concentration are read from the file and folder names, which follow a fixed convention:
 
-- **file** — ``<deviceid>_<signaltype>_<dose>.csv`` (:func:`parse_filename`), e.g.
+- **file**: ``<deviceid>_<signaltype>_<dose>.csv`` (:func:`parse_filename`), e.g.
   ``2-2_fscv_100nM.csv``, ``2-2_eis_0nM.csv``, ``2-2_fscv_stabilization-end.csv``,
   ``2-2_paired_live.csv``. ``signaltype`` is ``eis``/``fscv`` (in vitro) or ``paired``
-  (in vivo); the final field is a concentration (``0nM``, ``100nm`` — case-insensitive)
+  (in vivo); the final field is a concentration (``0nM``, ``100nm``, case-insensitive)
   or a protocol token (``stabilization``/``baseline``/``live``).
-- **folder** — ``<YYYYMMDD>_<devicetype>_<testtype>`` (:func:`parse_folder`), e.g.
+- **folder**: ``<YYYYMMDD>_<devicetype>_<testtype>`` (:func:`parse_folder`), e.g.
   ``20260720_neurostring_signal``. The date supplies the timepoint; ``devicetype``
   separates ``neurostring`` from ``cfme``; ``testtype`` is ``signal`` or ``channeltest``.
 
-The **content** parser is convention-agnostic — only the name parsers above depend on it, so a
+The **content** parser is convention-agnostic: only the name parsers above depend on it, so a
 different naming scheme can be supported by replacing them alone.
 """
 
@@ -149,7 +149,7 @@ def _parse_fscv(rows: list[list[str]], path: Path | None = None) -> dict[tuple[i
     if hdr_idx is None:
         return {}
     # Each "Fast Cyclic ... Channel N ..." header cell is one cycle block. ``rep``
-    # is the per-channel column-appearance index (0,1,2,…) — robust to the two
+    # is the per-channel column-appearance index (0,1,2,…), robust to the two
     # observed label styles: dose replicates ``Channel N [k]`` and stabilization
     # cycles ``Channel N Scan k [round]`` (the trailing bracket is a replicate in a
     # dose file, a stabilization round in a stabilization file). We keep ``scan`` and
@@ -226,7 +226,7 @@ def _parse_eis(rows: list[list[str]], path: Path | None = None) -> dict[tuple[in
         # math convention Z = Z' + j·Im(Z) that features.eis expects (capacitive
         # Im < 0). NOTE: the column's NAME suggests it already holds Im(Z); real exports show
         # otherwise, so verify this sign on a known-capacitive channel before trusting any
-        # derived capacitance — it is a property of the instrument software, not the physics.
+        # derived capacitance; it is a property of the instrument software, not the physics.
         zi = -np.array([_f(r[ci["z_imag"]]) for r in block])
         rep = rep_counter.get(ch, 0)
         rep_counter[ch] = rep + 1
@@ -273,8 +273,8 @@ def parse_filename(name: str) -> dict | None:
     Splits on ``_`` from the right so ``deviceid`` may itself contain underscores.
     ``signaltype`` is ``eis``/``fscv`` (in-vitro) or ``paired`` (in-vivo:
     time-sequential EIS+FSCV per channel in one file). The last field is either a
-    concentration like ``0nm``/``100nM`` → ``float`` nM, or a non-numeric token — the
-    lowercased string — covering the in-vitro protocol token ``stabilization`` and
+    concentration like ``0nm``/``100nM`` → ``float`` nM, or a non-numeric token (the
+    lowercased string), covering the in-vitro protocol token ``stabilization`` and
     the in-vivo periods ``baseline``/``live``. Returns ``None`` if it doesn't match.
     e.g. ``2-2_fscv_100nm.csv`` → ``{deviceid: '2-2', signaltype: 'fscv', dose: 100.0}``;
     ``2-2_fscv_stabilization.csv`` → ``{..., dose: 'stabilization'}``;

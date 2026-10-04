@@ -1,4 +1,4 @@
-"""PLS2 dose-curve-vector experiment (study experiment E3)."""
+"""PLS2 dose-curve-vector model."""
 
 import numpy as np
 import pandas as pd

@@ -1,7 +1,7 @@
-"""Stratify-by-drift diagnostic (study experiment E8) — is the signal just not evolved yet?
+"""Stratify-by-drift diagnostic: is the signal just not evolved yet?
 
 The pooled Q²≈0 could mean the state→drift map is genuinely absent, **or** that most channels are still on
-the noisy early plateau before their asymptotic decay — so within the measured window the target barely
+the noisy early plateau before their asymptotic decay, so within the measured window the target barely
 moves and there is nothing to predict beyond the mean. These look identical in a single pooled Q², but
 they prescribe opposite actions (stop vs *keep measuring*).
 
@@ -10,11 +10,11 @@ This diagnostic separates them. It runs the same forward-chained population mode
 |value−baseline|/|baseline| > ``drift_threshold``) vs those still **flat**, and reports each stratum's
 **target standard deviation** (how much there is to predict there). Signature of "not evolved yet":
 ``still_flat`` has near-zero target std and undefined/≈0 Q², while ``has_drifted`` has real target
-variance and a **higher** Q² — meaning the signal appears once channels evolve, so more timespan pays off.
+variance and a **higher** Q², meaning the signal appears once channels evolve, so more timespan pays off.
 
 ``clean_trend_channels`` additionally isolates channels with a strong monotone time trend (a ceiling
 diagnostic: if the model works only on clean-trend channels, the signal is real but needs well-behaved,
-evolved sensors — scope the deliverable accordingly).
+evolved sensors; scope the deliverable accordingly).
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ def drift_magnitude(sens_df: pd.DataFrame, value_col: str = "sensitivity") -> np
 def clean_trend_channels(sens_df: pd.DataFrame, value_col: str = "sensitivity",
                          min_abs_spearman: float = 0.6, min_times: int = 4) -> set:
     """Set of ``(device, channel)`` keys whose ``value_col`` has a strong monotone trend vs time
-    (|Spearman r| ≥ ``min_abs_spearman`` over ≥ ``min_times`` timepoints) — the well-behaved subset."""
+    (|Spearman r| ≥ ``min_abs_spearman`` over ≥ ``min_times`` timepoints), the well-behaved subset."""
     from scipy.stats import spearmanr
     id_cols = [c for c in ("device", "channel") if c in sens_df.columns]
     keep = set()
@@ -60,12 +60,12 @@ def stratify_by_drift(sens_df: pd.DataFrame, target: str = "sensitivity", drift_
     Returns a DataFrame with one row per stratum (``all``, ``has_drifted``, ``still_flat``): ``n`` test
     points, ``q2`` (vs the forward train-mean), ``rmsep``, and ``target_std`` (the dynamic range of the
     target in that stratum). Read ``has_drifted`` Q² ≫ ``still_flat`` Q² with ``still_flat`` target_std≈0
-    as "the signal only appears once channels evolve — keep measuring".
+    as "the signal only appears once channels evolve; keep measuring".
 
     ``alpha`` is the ridge penalty. **Default ``None`` selects it per fold by inner cross-validation**
     over :data:`ALPHA_GRID`, which is what you want here: this problem has ~145 predictors and only a
     few dozen training rows early in the forward chain, so a fixed small penalty overfits catastrophically
-    (a fixed ``alpha=1.0`` returns Q² ≈ −45 with RMSEP ~7× the naive mean — a property of the penalty,
+    (a fixed ``alpha=1.0`` returns Q² ≈ −45 with RMSEP ~7× the naive mean: a property of the penalty,
     not of the data). Pass a float only to reproduce a specific historical run.
     """
     from ..data.schema import RESERVED_COLUMNS

@@ -1,7 +1,7 @@
 """Pooled error metrics for the CV tracks.
 
 Everything is built from three per-fold quantities: ``sse``, ``n_test``, and
-``tss``. Pooled metrics are ``sqrt(ΣSSE/ΣN)`` and ``1 − ΣSSE/ΣTSS`` — the RMSE/Q²
+``tss``. Pooled metrics are ``sqrt(ΣSSE/ΣN)`` and ``1 − ΣSSE/ΣTSS``: the RMSE/Q²
 over the *concatenation* of held-out residuals (a sample-weighted / micro
 average), which correctly handles unequal fold sizes. Macro variants weight each
 channel equally instead.
@@ -17,7 +17,7 @@ import numpy as np
 #: Ridge penalties searched by :func:`fit_ridge` when no explicit ``alpha`` is given. The range is
 #: deliberately wide and reaches far above sklearn's defaults: the recalibration problem is
 #: p ≫ n (~145 leakage-safe predictors against a few dozen training rows in the early forward-chained
-#: folds), so the useful penalties live around 1e3–1e5, and anything near 1.0 interpolates the
+#: folds), so the useful penalties live around 1e3 to 1e5, and anything near 1.0 interpolates the
 #: training set and extrapolates wildly out of sample.
 ALPHA_GRID: tuple[float, ...] = (1.0, 10.0, 100.0, 1e3, 1e4, 1e5, 1e6)
 
@@ -25,10 +25,11 @@ ALPHA_GRID: tuple[float, ...] = (1.0, 10.0, 100.0, 1e3, 1e4, 1e5, 1e6)
 def fit_ridge(X, y, alpha: float | None = None, alphas: Sequence[float] = ALPHA_GRID):
     """Fit a ridge, choosing ``alpha`` by inner CV when it is not supplied.
 
-    ``alpha=None`` (the default for the E6/E8 estimators) runs :class:`~sklearn.linear_model.RidgeCV`
+    ``alpha=None`` (the default for the hierarchical and stratify estimators) runs
+    :class:`~sklearn.linear_model.RidgeCV`
     over ``alphas`` using leave-one-out generalized CV **on the training fold only**, so the penalty
     is selected without ever seeing held-out data. Passing a float pins the penalty instead, which is
-    only useful for reproducing a specific historical run — a fixed small penalty on this problem
+    only useful for reproducing a specific historical run: a fixed small penalty on this problem
     produces Q² ≈ −45 and an RMSEP ~7× the naive mean.
 
     Falls back to the largest grid value if the inner CV cannot run (e.g. a degenerate fold).
@@ -69,7 +70,7 @@ class FoldResult:
     ) -> "FoldResult":
         """Build a fold result from held-out predictions (linear-scale units).
 
-        ``mean_train`` is the mean response over the fold's *training* rows — the
+        ``mean_train`` is the mean response over the fold's *training* rows: the
         honest "predict-the-mean" baseline for Q². Back-transform log-model
         predictions to linear units *before* calling this.
         """
@@ -128,7 +129,7 @@ def bootstrap_rmsep_ci(
     Returns ``(lo, hi)`` percentile bounds. Resampling at the fold level (not the
     row level) is deliberate: the fold is the unit of uncertainty here, because rows
     within a fold share a sensor and a timepoint and so are not independent. With few
-    folds the interval comes out wide — which is the honest result, not a defect.
+    folds the interval comes out wide, which is the honest result, not a defect.
     """
     folds = list(folds)
     if len(folds) < 2:

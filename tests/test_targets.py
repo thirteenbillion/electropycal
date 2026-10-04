@@ -79,7 +79,7 @@ def test_compare_target_framings_metrics():
 
 def test_sensitivity_featureset_ignores_stray_string_columns():
     """A non-feature string column (e.g. a downstream 'devicetype'/'sensor' label) must not break the
-    per-group mean — only numeric predictors are averaged."""
+    per-group mean; only numeric predictors are averaged."""
     import numpy as np, pandas as pd
     from electropycal.data.synthetic import make_dataset
     from electropycal.features.targets import sensitivity_featureset

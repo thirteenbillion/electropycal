@@ -60,7 +60,7 @@ def test_full_queue_covers_architectures_and_log_transform():
     # implemented + extension-point architectures are present
     assert {"linear_plsr", "weighted_plsr", "orthogonal_plsr", "nonlinear_plsr"} <= archs
     # the log model is now a TRANSFORM (full log model: log(x/d0) features + log target),
-    # applicable to any architecture — not a separate 'log_plsr' architecture
+    # applicable to any architecture, not a separate 'log_plsr' architecture
     assert {c.transform for c in q} >= {"linear", "log"}
 
 

@@ -1,21 +1,21 @@
-"""Hierarchical / partial-pooling recalibration model (study experiment E6).
+"""Hierarchical / partial-pooling recalibration model.
 
 The pooled ``global`` track fits one state→drift map for every channel (infinite shrinkage); the
 ``channel`` track fits a separate map per channel (zero shrinkage, and starved). **Partial pooling** is
 the principled interpolation between them: a population fixed-effect map plus a per-group **random
 effect** whose strength is set by how much that group's own history supports departing from the
-population. Empirical-Bayes shrinkage does this without hand-picking "good" channels — a noisy group is
+population. Empirical-Bayes shrinkage does this without hand-picking "good" channels: a noisy group is
 pulled hard toward the population, a well-behaved group keeps its own trajectory.
 
 Forward-chained and deployment-faithful: a test group's random effect is estimated from **its own
 earlier timepoints only** (the outer loop trains on ``timepoint < t_test``), so the population prior
 carries a channel early and it specializes as its history accrues. Random **intercept** + random
-**age-slope** (``time_since_baseline``), since E1 shows per-channel slopes differ.
+**age-slope** (``time_since_baseline``), since per-channel slopes differ.
 
 ``group_level``:
-  - ``channel``            — random effect per ``(device, channel)`` sensor.
-  - ``device``             — random effect shared by all channels on a device.
-  - ``channel_in_device``  — nested: device-level effect + channel-within-device effect (the
+  - ``channel``              random effect per ``(device, channel)`` sensor.
+  - ``device``               random effect shared by all channels on a device.
+  - ``channel_in_device``    nested: device-level effect + channel-within-device effect (the
                              physically-correct "auto" grouping; two variance components).
 
 Returns pooled ``q2`` (partial pooling) alongside ``q2_fixed`` (population map only, no random effects)

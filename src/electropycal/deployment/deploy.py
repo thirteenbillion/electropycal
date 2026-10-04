@@ -2,11 +2,11 @@
 
 Two entry points:
 
-- :func:`freeze_model` — produce a portable ``frozen_model/`` bundle from a model
+- :func:`freeze_model`: produce a portable ``frozen_model/`` bundle from a model
   the *user chooses* (architecture, ``k``, featureset) trained on 100% of the
   in-vitro data, with frozen scalers computed once. This is deployment Step 0; the
   choice of model is deliberately left to the caller.
-- :func:`recalibrate` — apply a frozen bundle to new in-vivo features (already
+- :func:`recalibrate`: apply a frozen bundle to new in-vivo features (already
   D0-normalized against an early in-vivo baseline): robust-scale with the frozen
   statistics, predict (back-transform if log), and flag domain shift via CORAL.
   No refitting occurs.
@@ -39,7 +39,7 @@ def freeze_model(X: np.ndarray, y: np.ndarray, feature_names: list[str], archite
     in-vitro features, for CORAL), ``feature_names.json``, ``d0_normalization.json``,
     and ``manifest.json``.
 
-    ``provenance`` is merged into ``manifest.json`` under a ``"provenance"`` key — in
+    ``provenance`` is merged into ``manifest.json`` under a ``"provenance"`` key: in
     particular the seed set of the discovery condition this model came from. A frozen bundle
     otherwise records the architecture and feature index but not which seed selected them, so a
     model chosen under a multi-seed sweep could not be traced back to it.
@@ -88,7 +88,7 @@ def freeze_top(run_dir: str | Path, data, condition: str | None = None,
     folds, and a **consensus feature subset** (features selected in ≥ ``stability_min``
     of folds; all features if the condition has no selector), then train on all of
     ``data`` and write a ``frozen_model/`` bundle. ``data`` is a ``RunData`` or any
-    featureset ``RunData.from_frame`` accepts. No per-fold files are copied — the
+    featureset ``RunData.from_frame`` accepts. No per-fold files are copied; the
     deployable model is retrained here on the full dataset.
     """
     import statistics
@@ -223,7 +223,7 @@ def recalibrate_invivo(model: FrozenModel | str | Path, invivo_root: str | Path,
     missing = [c for c in cols if c not in df.columns]
     if missing:
         raise ValueError(f"in-vivo featureset missing {len(missing)} model features "
-                         f"(e.g. {missing[:3]}) — check the frequency grid matches training")
+                         f"(e.g. {missing[:3]}); check the frequency grid matches training")
     df = d0_normalize_frame(df, cols)                     # per-sensor, vs early in-vivo baseline
 
     rows = []

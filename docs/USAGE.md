@@ -18,13 +18,14 @@ Companion documents:
 ## 1. Installation
 
 ```bash
-pip install electropycal
+pip install --upgrade electropycal
 ```
 
-For the notebooks, which need jupyter and matplotlib:
+`--upgrade` matters if any version is already installed: without it `pip install` leaves the
+existing one in place. For the notebooks, which need jupyter and matplotlib:
 
 ```bash
-pip install "electropycal[notebooks]"
+pip install --upgrade "electropycal[notebooks]"
 ```
 
 Python 3.11, 3.12 or 3.13. Core dependencies: numpy, scipy, pandas, scikit-learn, pyarrow,
@@ -75,10 +76,14 @@ nothing off Colab:
 ```python
 import sys
 if "google.colab" in sys.modules:
-    !pip install -q electropycal
+    !pip install -q --upgrade electropycal
     from google.colab import drive
     drive.mount("/content/drive")
 ```
+
+The same cell then checks the installed version and raises a readable error if it is too old.
+If that happens right after an upgrade, restart the runtime: a module already imported stays
+in memory, and the upgrade does not reach it.
 
 Then point `ROOT` at your data, wherever it lives:
 
@@ -166,24 +171,25 @@ class of bug the extraction pin exists to prevent. Pass a tuple, opt into `band=
 First open **`notebooks/raw_spectra_review.ipynb`** and run it: `ROOT` defaults to the
 shipped demo tree; point it at your own export to use real data:
 per device it overlays the raw EIS spectra (Bode −phase / |Z| / Nyquist, with the
-inductive-onset crossover) and FSCV I–V loops + `i − i_bg` dose surface across timepoints,
+inductive-onset crossover) and FSCV I-V loops + `i − i_bg` dose surface across timepoints,
 and recommends a `BAND`. Then open **`notebooks/quality_filtering_dashboard.ipynb`**, set
 `ROOT` and the stringency parameters (incl. that `BAND`), and run it: the measurement
-schedule, per-check (EIS.1–3, FSCV.1–2) pass/fail dropout, and the channel-timepoint
+schedule, per-check (EIS.1-3, FSCV.1-2) pass/fail dropout, and the channel-timepoint
 validity table that mirrors what discovery consumes.
 
 To confirm the interface stabilized before dose collection, open
-**`notebooks/stabilization_review.ipynb`** and set `DEVICE_DIR`/`DEVICE`: it ingests
-the `<deviceid>_fscv_stabilization-start.csv` and `-end.csv` files, plots
-`I(V_target)` per channel over the stabilization cycles for **start vs end** (with
-round boundaries), and applies the objective plateau criterion
-(`data.stabilization.check_converged`) so the start→end settling is visible per
-channel. (A single legacy `..._stabilization.csv` is treated as the end file.)
+**`notebooks/stabilization_review.ipynb`**, set `ROOT`, and pick device-timepoints with
+`SELECT` (default: all available). It reads whichever stabilization files a session
+exported: a `-full` file is plotted on its own, otherwise the `-end` file (solid) and the
+`-start` file (dashed). Per device-timepoint it plots the raw cycles, `I(V_target)` per
+channel over the stabilization cycles with round boundaries, and a cycle-drift convergence
+metric, and applies a plateau criterion so the settling is visible per channel. (A single
+legacy `..._stabilization.csv` is treated as the end file.)
 
 ### 4.4 Run discovery
 
-Every run mode supports **both** a plain full-queue run **and** decision-gated,
-*editable* batches, after each batch you can exclude unpromising conditions (or
+Discovery supports **both** a plain full-queue run **and** decision-gated,
+*editable* batches: after each batch you can exclude unpromising conditions (or
 keep auto-flagged ones anyway) before the next batch runs. Batches are defined by
 the condition names in `baseline_queue()` (the integer before the dot:
 `baselines_1.2…` → batch 1).
@@ -237,7 +243,7 @@ returns `True` (proceed), `False`/`None` (stop), or a **`list[Condition]` that
 replaces the remaining queue**. That list *is* the include/exclude edit. A
 per-condition `gate(condition, agg, ranking) -> bool` is also available. (For the
 finest control, drive it yourself: loop over `run_condition` per batch, inspect,
-and build the next batch, this is what the notebook does.)
+and build the next batch; this is what the notebook does.)
 
 **Option D: checkpointed notebook:** open **`notebooks/discovery_checkpointed.ipynb`**.
 `ROOT = None` (the default) resolves the shipped demo tree from whatever directory the kernel
@@ -248,7 +254,7 @@ and `exclude("<name>", …)` edits the `queue` list before you run the next batc
 
 **Summary.** Full-queue: A / C (no gate) / D (run all cells). Editable, decision-gated
 batches: **B** (terminal prompt), **C** (`batch_gate` returning an edited list), **D**
-(edit `queue` between cells). Plain runs are never auto-pruned, gating is opt-in.
+(edit `queue` between cells). Plain runs are never auto-pruned; gating is opt-in.
 
 ### 4.5 Read the results
 
@@ -256,11 +262,13 @@ batches: **B** (terminal prompt), **C** (`batch_gate` returning an edited list),
 outputs/model_discovery_<timestamp>/
 ├── run_config.json                 # target, queue, profile, seeds, cap flag, dataset size
 ├── summary.parquet                 # one row per (condition, fold): metrics + telemetry
+├── logs/run.log
 ├── report/
 │   ├── discovery_summary.md         # ranked candidates with CIs; start here
 │   ├── condition_ranking.parquet    # same, machine-readable
 │   └── feature_ranking.parquet      # features by cross-condition selection stability
 └── conditions/<name>/
+    ├── condition_config.json         # the condition, and the seed set it actually ran over
     ├── aggregated_metrics.json       # pooled RMSEP + CI, macro RMSEP, Q²
     ├── feature_stability.parquet     # per-feature selection frequency
     ├── predictions.parquet           # every held-out prediction, by sensor and timepoint
@@ -278,28 +286,40 @@ Open `report/discovery_summary.md` for the ranked table, or run
 plot the condition ranking with CIs, per-fold RMSEP spread, and the top features by
 cross-condition selection stability.
 
-> **Note on N:** forward-chained CV needs ≥ 3 prior timepoints, so meaningful
-> discovery needs ≥ 4 timepoints per device. With fewer, conditions produce no
-> evaluable folds (metrics are NaN), expected until your series fills in.
+> **Note on N:** at the default `min_train_times=3`, forward-chained CV needs ≥ 4
+> timepoints per device. With fewer, the auto-cap above still produces folds, but they
+> rest on very little history, so treat the numbers as provisional until your series
+> fills in. Nested CV needs ≥ 3 timepoints in any case; with only 2, expect no evaluable
+> folds (metrics are NaN).
 
 ### 4.6 The terminal commands, explained
 
 **`electropycal extract`**: parse a raw PSTrace directory into a featureset table.
-- `--raw <dir>` *(required)*, root holding `<date>_<devicetype>_signal/` folders.
+- `--raw <dir>` *(required)*, root holding `<date>_<devicetype>_signal/` folders, or `demo`.
 - `--out <path>`, output featureset (default `featureset_extracted.parquet`).
+- `--band`, `--peak-method`, `--acceptance` and the other QC flags: see §4.2,
+  `electropycal extract --help`, and `docs/REFERENCE.md` §1.5.
+- `--n-jobs <int>`, worker processes over sessions (`-1` = all cores); `--progress` prints
+  per-session progress.
 
 **`electropycal discover`**: run the discovery task queue; writes a timestamped
 `outputs/model_discovery_<ts>/` run directory.
-- `--data <src>`, `synthetic` (default), a featureset `.parquet`/`.csv`, or a raw
-  PSTrace directory (auto-extracted).
+- `--data <src>`, `synthetic` (default), `demo`, a featureset `.parquet`/`.csv`, or a raw
+  PSTrace directory (auto-extracted, using `--band`, default `auto`).
+- `--target {normipeak,sensitivity}`, the prediction target (default `normipeak`).
 - `--out <dir>`, output root (default `outputs`).
 - `--profile {fast,full}`, `fast` = tiny grids/bootstrap (seconds; smoke tests);
   `full` = the default `Profile` (real run). Default `full`.
 - `--n-jobs <int>`, joblib workers over CV folds within each condition (default 1);
   set to your core count for speed (BLAS is auto-pinned to avoid oversubscription).
-- `--seed <int>`. RNG seed for CARS/bootstrap reproducibility (default 0).
+- `--seed <int>`, the seed for CV fold construction (default 0).
+- `--seeds 0,1,2`, the seed set the stochastic selectors (CARS/MI) are repeated over and
+  averaged across (default: the profile's `(0,)`); see §6.
+- `--min-train-times <int>`, override the auto-capped `min_train_times` (see "Short time
+  series" above).
 - `--batched`, run batch-by-batch, printing each batch's ranking and prompting
   before continuing (the interactive decision-gate workflow).
+- `--progress`, print per-condition and per-fold progress with an ETA.
 
 **`electropycal freeze`**: freeze a discovery-selected model on 100% of in-vitro data.
 - `--run <dir>` *(required)*, a completed discovery run directory.
@@ -354,7 +374,7 @@ freeze_model(X_invitro, y_invitro, feature_names, "linear_plsr", k=3,
 from electropycal.deployment.deploy import recalibrate, recalibrate_invivo
 # A) raw in-vivo directory → extract + D0-normalize (vs early in-vivo baseline) + per-session CORAL.
 #    'out' saves the result; 'flag_distance' is optional (see note below).
-res = recalibrate_invivo("outputs/frozen_model", "data/invivo",
+res = recalibrate_invivo("outputs/frozen_model", "my_invivo_export",
                          out="outputs/deployments/recalibrated.parquet")
 #   → DataFrame: timepoint, n, mean_norm_ipeak, domain_distance[, confidence]
 # B) a pre-built in-vivo feature matrix (already D0-normalized, columns aligned):
@@ -362,7 +382,7 @@ out = recalibrate("outputs/frozen_model", X_invivo)   # {"norm_ipeak", "domain_d
 ```
 ```bash
 # default --out is outputs/deployments/recalibrated.parquet
-electropycal deploy --model outputs/frozen_model --raw data/invivo
+electropycal deploy --model outputs/frozen_model --raw my_invivo_export
 # or, from a pre-built featureset:
 electropycal deploy --model outputs/frozen_model --data invivo_featureset.parquet
 ```
@@ -374,9 +394,11 @@ electropycal deploy --model outputs/frozen_model --data invivo_featureset.parque
 Or open **`notebooks/deployment_domain_shift.ipynb`** and run it. Leave `ROOT` and `BUNDLE`
 at `None`, the default, to use the shipped `demo/in_vivo/` tree, or set them to your own
 in-vivo export directory and frozen-model directory at the top of the deployment cell. It
-plots recalibrated NormIpeak and CORAL domain shift per session. `frozen_model/` = `model_arrays.npz` + `manifest.json` +
-`feature_names.json` + `full_feature_names.json` + `d0_normalization.json` +
-`scaler_center/scale.npy` (no pickle). Recalibration applies the frozen robust scaler,
+plots recalibrated NormIpeak and CORAL domain shift per session. `frozen_model/` =
+`model_arrays.npz` + `manifest.json` + `feature_names.json` + `full_feature_names.json` +
+`d0_normalization.json` + the frozen scaler (`scaler.npz`, `scaler_center.npy`,
+`scaler_scale.npy`) + `impute_median.npy` + `reference_features.npy` (the scaled in-vitro
+features CORAL compares against); no pickle. Recalibration applies the frozen robust scaler,
 predicts, back-transforms (if log), and flags CORAL domain-shift.
 
 > In-vivo ingestion assumes the **same internal CSV format** as in-vitro exports and a
@@ -409,10 +431,10 @@ full = extract_dataset(root, band=(2.0, 2000.0), pin_out="run_config.json")
 subset = extract_dataset(staged_root, pin="run_config.json")
 ```
 
-Without the pin, step 2 silently re-anchors, dropping a device's earliest session moves its
+Without the pin, step 2 silently re-anchors: dropping a device's earliest session moves its
 `device_d0`, so rows that were `timepoint=1.0` and `4.0` come back as `0.0` and `3.0`.
 
-**New/changed API**
+**The API**
 
 - `extract_dataset(..., pin=)`, a path to a `run_config.json` (or the parsed dict). `band`,
   `device_d0`, `ref_grid`, `d0_row` and the feature column set are taken verbatim and never
@@ -424,8 +446,12 @@ Without the pin, step 2 silently re-anchors, dropping a device's earliest sessio
   percentile and which types get a `ref_grid` anchor.
 - `extract_dataset(..., on_empty_session=)`, `"warn"` (default) emits
   `EmptySessionWarning` naming any `(device, timepoint)` that produced no rows and why;
-  `"raise"` raises `EmptySessionError`; `"ignore"` is the old silence. A session absent from the
+  `"raise"` raises `EmptySessionError`; `"ignore"` stays silent. A session absent from the
   featureset is otherwise indistinguishable from one never measured.
+- `extract_dataset(..., pin=, pin_mode="extend")`, for an incremental rebuild over a corpus
+  that has grown: the pinned anchors are still used verbatim, but sessions the pin has not
+  seen are admitted. The default, `pin_mode="reproduce"`, requires the input to be a subset of
+  what the pin recorded.
 - `electropycal discover --seeds 0,1,2`, the seed **set** the stochastic selectors (CARS/MI) are
   repeated over and averaged across. Distinct from `--seed`, which is the single CV-fold seed.
   Deterministic conditions collapse to one seed internally; the *effective* set is recorded per
@@ -436,13 +462,16 @@ session dated earlier than its pinned `device_d0`, a feature-column mismatch, an
 or `device_types` conflicting with the pin, and, the one that catches a partial fetch, a
 per-session row count that differs from the pin. A session short its EIS or its 0 nM background
 yields zero rows without raising anywhere else, so a staged extraction would otherwise just be
-quietly smaller.
+quietly smaller. `pin_mode="extend"` admits sessions the pin has not seen, but still
+row-count checks the pinned ones, and raises if a pinned session produces no rows at all.
 
 **The record.** `run_config.json` carries `schema_version: 2` and an `extraction` block
 (`band_hz`, `band_source`, `device_d0`, `ref_grid_hz` per device type, `feature_columns`,
 `d0_rows`, `device_types`, per-session `{timepoint, n_rows}`, and the scalar `params`). A
 discovery run embeds the same block, so a run states both the modelling knobs and the extraction
-parameters behind its numbers. The public names are
+parameters behind its numbers. That happens when a `run_config.json` sits in the featureset's
+directory: `electropycal discover` looks there, and from Python pass
+`run_discovery(..., provenance_root=<that directory>)`. The public names are
 `PIN_SCHEMA_VERSION`, `PinMismatch`, `load_pin`, `session_key`, `EmptySessionWarning` and
 `EmptySessionError`; everything else in `features.pin` is an implementation detail.
 

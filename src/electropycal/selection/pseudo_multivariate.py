@@ -99,7 +99,7 @@ def select(method: str, X: np.ndarray, y: np.ndarray, k: int, threshold: float) 
     scored as ``-log10(p)``, so 2.0 means p <= 0.01. See :func:`smc_significance`.
 
     Zero-variance columns (e.g. a feature that is constant within this train fold) are scored 0 and
-    excluded from the internal PLSR fit — a constant column makes sklearn's PLS standardization divide
+    excluded from the internal PLSR fit: a constant column makes sklearn's PLS standardization divide
     by a zero std and emit NaN loadings. ``k`` is capped to the number of live columns so PLS always fits.
     """
     X = np.asarray(X, float)

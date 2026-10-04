@@ -1,7 +1,7 @@
 """Variance-structure (ICC) pre-filter: keep features that are reliable within a sensor.
 
 Keeps features whose variance is dominated by the *within-channel, between-time*
-axis — i.e. features that actually track the sensitivity evolution we want to
+axis, i.e. features that actually track the sensitivity evolution we want to
 recalibrate, rather than static between-channel or dose-response variance. Uses
 the variance decomposition per feature. It is leakage-free, and ICC varies smoothly with the
 threshold, so it does not need to be CV-optimized inside the modeling loop.

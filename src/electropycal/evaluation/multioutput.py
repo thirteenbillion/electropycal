@@ -1,11 +1,11 @@
-"""Multi-output (PLS2) dose-curve-vector experiment (study experiment E3).
+"""Multi-output (PLS2) dose-curve-vector model.
 
-Predicts the **whole dose-response curve** — ``NormIpeak`` at every concentration, as a *vector* — from
+Predicts the **whole dose-response curve** (``NormIpeak`` at every concentration, as a *vector*) from
 the dose-invariant electrode-state features via multivariate PLS (**PLS2**), under forward-chained CV.
 This sidesteps the scalar curve-fit misspecification entirely (no Langmuir/Hill, no exploding ``Kd``):
 the target is the measured curve itself. It does **not** change the fold count (still set by the
 channel×timepoint splits), so it targets *skill/robustness*, not fold starvation. Classical multivariate
-PLS — not deep learning.
+PLS, not deep learning.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ def dose_curve_matrix(df: pd.DataFrame, value_col: str = "NormIpeak",
                       conc_col: str = "concentration", min_conc: int = 3):
     """Collapse a per-dose featureset to one **curve vector** per ``(device, channel, timepoint)``.
 
-    Returns ``(meta, X, Y, feat_names, concs)`` — ``meta`` (the id columns + ``timepoint``), the mean
+    Returns ``(meta, X, Y, feat_names, concs)``: ``meta`` (the id columns + ``timepoint``), the mean
     dose-invariant predictor matrix ``X``, the dose-vector target ``Y`` (one column per concentration),
     the feature names, and the sorted concentrations. Groups with fewer than ``min_conc`` measured
     concentrations are dropped; remaining missing curve entries are left as NaN (imputed per-fold).

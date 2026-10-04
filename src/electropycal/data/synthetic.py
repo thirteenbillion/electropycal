@@ -2,7 +2,7 @@
 pipeline and notebooks end-to-end before real PSTrace data is wired in.
 
 Generates a post-extraction featureset (X: N×157, y: NormIpeak) with realistic
-structure — between-channel offsets, temporal drift of sensitivity, a dose
+structure: between-channel offsets, temporal drift of sensitivity, a dose
 response, a handful of *informative* EIS features that track sensitivity, plus
 replicate-level values so the measurement-reliability diagnostic runs.
 Swap this out for real feature extraction once PSTrace CSV parsing lands.
@@ -112,7 +112,7 @@ def make_invivo_drift(
     """Progressively drifted feature matrices per in-vivo timepoint (for CORAL demo).
 
     Applies a growing mean shift + covariance inflation to the in-vitro X, so
-    CORAL distance increases with time — the drift path deployment tracks.
+    CORAL distance increases with time, the drift path deployment tracks.
     """
     rng = np.random.default_rng(random_state)
     base = ds.X
@@ -153,7 +153,7 @@ REAL_INVITRO_STATS = {
              # measured log-log slope of median NormIpeak vs concentration (Freundlich, sub-linear).
              "normipeak_at_1uM": 0.02405, "peak_beta": 0.394,
              # measurement noise. ``noise_uA`` is the amplitude of a *correlated* (low-pass) current
-             # noise with correlation length ``noise_tau`` samples — electrochemical noise is not
+             # noise with correlation length ``noise_tau`` samples; electrochemical noise is not
              # white, and white noise of the same power would manufacture spurious sharp peaks.
              # ``rep_cv`` is the replicate-to-replicate scatter of the peak height.
              #
@@ -180,7 +180,7 @@ BRANCH_EPS = 1e-8
 
 def _fv(x) -> str:
     """Format a voltage. Needs enough significant digits to preserve ``BRANCH_EPS`` (~1e-8 on a
-    ~1 V sweep) through the CSV round-trip — otherwise the two branches collide again."""
+    ~1 V sweep) through the CSV round-trip; otherwise the two branches collide again."""
     return f"{x:.12g}"
 
 
@@ -194,12 +194,12 @@ def _sweep():
     """The real triangular FSCV sweep: ``n_sweep`` samples, ``v_lo`` -> ``v_hi`` -> ``v_lo``.
 
     The descending branch is the ascending one shifted up by one step and reversed, so the apex is
-    its first sample — the real instrument's geometry (``desc[::-1] ≈ asc + step``, to within the
+    its first sample: the real instrument's geometry (``desc[::-1] ≈ asc + step``, to within the
     ~1e-8 V of its float32 export).
 
     This is load-bearing, not cosmetic. A perfect mirror (``asc`` then ``asc[::-1]``) places anodic
     and cathodic samples at *bit-identical* voltages, and the background alignment in
-    ``extract_dataset`` interpolates the signal grid onto the **sorted** background voltages — on an
+    ``extract_dataset`` interpolates the signal grid onto the **sorted** background voltages; on an
     exact tie ``np.interp`` returns the last match, i.e. the cathodic sample. Every anodic point
     would then be subtracted against the other branch and ``NormIpeak`` would report the ~22 uA
     capacitive loop instead of the ~0.3 uA faradaic peak. Real exports are safe only because their
@@ -231,7 +231,7 @@ def _background(v, ch=0):
 
 
 def _background_at_vox(ch=0):
-    """The background level at ``v_ox`` — the denominator of ``NormIpeak``."""
+    """The background level at ``v_ox``, the denominator of ``NormIpeak``."""
     return ((_FSCV["bg_offset"] + _FSCV["bg_slope"] * _FSCV["v_ox"] + _FSCV["loop_uA"] / 2)
             * (1.0 + 0.05 * (ch - 5)))
 
@@ -254,7 +254,7 @@ def _peak_uA(conc_nM, ch=0):
 
 
 def _current_noise(rng, n):
-    """Correlated (low-pass) current noise — see ``noise_uA`` / ``noise_tau`` in the stats block."""
+    """Correlated (low-pass) current noise; see ``noise_uA`` / ``noise_tau`` in the stats block."""
     tau = int(_FSCV["noise_tau"])
     kernel = np.exp(-np.arange(4 * tau) / tau)
     kernel /= np.linalg.norm(kernel)
@@ -268,7 +268,7 @@ def _write_eis_file(path, channels, bad=(), Rs=_EIS["Rs"], Rct=_EIS["Rct"], Cdl=
     parallel combination): ``Z = Rs + Rct/(1 + jωRctCdl)``. This traces the standard
     charge-transfer **semicircle** in the Nyquist plane (``Z'`` sweeps ``Rs+Rct`` → ``Rs``
     with frequency), unlike a pure ``Rs+C`` series whose constant ``Z'`` would draw a
-    vertical line. Still passes EIS checks A–C (capacitive, ``|Z|``-monotone, ``Z' > 0``).
+    vertical line. Still passes EIS checks A-C (capacitive, ``|Z|``-monotone, ``Z' > 0``).
 
     ``reps`` replicate spectra per channel are written (each a separate ``CH N`` block with
     small multiplicative noise), so replicate-spread views have something to show."""
@@ -341,7 +341,7 @@ def _write_fscv_stabilization_file(path, channels, rounds=3, cycles_per_round=20
 
     ``I(v_target)`` drifts down and plateaus across cycles (an exponential settle).
     With ``settled=False`` (a *stabilization-start* file) the interface is still
-    drifting — a long time-constant and large residual — so start-vs-end comparison
+    drifting (a long time-constant and large residual), so start-vs-end comparison
     shows the improvement; ``settled=True`` (*stabilization-end*) has converged.
     """
     rng = np.random.default_rng(random_state)
@@ -467,12 +467,12 @@ def write_synthetic_pstrace_dir(root, devices=("2-2", "2-3"), timepoints=(0, 1, 
     ``stab_phases`` selects which stabilization spellings to emit (see :data:`STAB_PHASES`);
     ``stab_cycles_per_round`` sets how many consecutive cycles each round holds. Both default
     to the full, 20-cycle tree so library callers and the test-suite fixtures are unchanged.
-    The shipped demo overrides them — stabilization CSVs dominate its size, and file size is
+    The shipped demo overrides them: stabilization CSVs dominate its size, and file size is
     linear in ``len(stab_phases) x rounds x stab_cycles_per_round``.
 
     Lowering ``stab_cycles_per_round`` is safe for the review path: rounds come from each
     block's ``[n]`` bracket, and ``stabilization_traces`` derives the global cycle index by
-    counting, so nothing infers the value back. Do not go below 3 — ``round_average_cycles``
+    counting, so nothing infers the value back. Do not go below 3: ``round_average_cycles``
     drops each round's cold-start cycle, so 2 would leave a single cycle to "average".
     """
     unknown = set(stab_phases) - set(STAB_PHASES)

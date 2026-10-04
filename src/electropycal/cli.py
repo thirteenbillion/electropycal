@@ -48,8 +48,8 @@ def _resolve_cli_band(root, band):
 
     The library primitive deliberately has no ``band`` default: ``"auto"`` is a percentile over
     whatever corpus is present, so it cannot be reproduced over a staged subset. The CLI keeps
-    ``--band auto`` as its default because there it is a *stated* choice — it appears in
-    ``--help`` and in the docs — but it must not be a silent one, so the resolved band is
+    ``--band auto`` as its default because there it is a *stated* choice (it appears in
+    ``--help`` and in the docs), but it must not be a silent one, so the resolved band is
     always printed and a concrete tuple is passed down. The value also lands in the run's
     extraction pin, so a later run can reuse it rather than re-deriving it.
     """
@@ -235,7 +235,7 @@ def _deploy(args) -> None:
     from .deployment.deploy import recalibrate, recalibrate_invivo
     dest = Path(args.out)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    if args.raw:                                          # raw in-vivo directory → per-session
+    if args.raw:                                          # raw in-vivo directory -> per-session
         res = recalibrate_invivo(args.model, args.raw, flag_distance=args.flag_distance, out=dest)
         print(f"in-vivo recalibration (per session) written to: {dest}")
         print(res.to_string(index=False))
@@ -255,6 +255,12 @@ def _deploy(args) -> None:
 
 
 def main(argv=None) -> None:
+    # A console or pipe whose encoding cannot represent a character in a message (the Windows
+    # default codepage, piped or redirected) must not turn --help or a progress line into a
+    # UnicodeEncodeError. Replace what cannot be encoded rather than crash.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
     parser = argparse.ArgumentParser(prog="electropycal")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -305,7 +311,7 @@ def main(argv=None) -> None:
                         "data-driven) or 'lo,hi' in Hz. Ignored for a featureset/synthetic --data")
     d.add_argument("--target", choices=["normipeak", "sensitivity"], default="normipeak",
                    help="prediction target: 'normipeak' (per-dose, default) or 'sensitivity' "
-                        "(per sensor-timepoint dose-response slope — the recalibration signal)")
+                        "(per sensor-timepoint dose-response slope, the recalibration signal)")
     d.add_argument("--out", default="outputs")
     d.add_argument("--profile", choices=["fast", "full"], default="full")
     d.add_argument("--n-jobs", type=int, default=1, dest="n_jobs",
@@ -321,7 +327,7 @@ def main(argv=None) -> None:
                         "internally, so this multiplies only the stochastic ones. Default: the "
                         "profile's own seeds=(0,)")
     d.add_argument("--min-train-times", type=int, default=None, dest="min_train_times",
-                   help="min prior timepoints before a t_test is used (nested CV needs ≥3 "
+                   help="min prior timepoints before a t_test is used (nested CV needs >= 3 "
                         "timepoints; set 1 for a 2-timepoint smoke run)")
     d.add_argument("--batched", action="store_true",
                    help="review/edit each task-queue batch's ranking before continuing")
@@ -348,7 +354,7 @@ def main(argv=None) -> None:
     p.add_argument("--out", default="outputs/deployments/recalibrated.parquet")
     p.add_argument("--flag-distance", type=float, default=None, dest="flag_distance",
                    help="optional CORAL distance threshold to flag EXTRAPOLATING (with --raw); "
-                        "calibrate from in-vitro CV distances — omit to just read raw distances")
+                        "calibrate from in-vitro CV distances; omit to just read raw distances")
     p.set_defaults(func=_deploy)
 
     c = sub.add_parser("features", help="print the feature catalog (types, definitions, units, role)")

@@ -193,8 +193,8 @@ class StabilizationIndex:
 
         This used to be ``round * self.cycles_per_round + cycle_in_round + 1``, which silently
         assumed the acquisition used exactly ``self.cycles_per_round`` (default 20) cycles per
-        round. When it did not — a different protocol, or a demo tree generated with a smaller
-        round — every printed cycle number was wrong, and nothing detected the disagreement.
+        round. When it did not (a different protocol, or a demo tree generated with a smaller
+        round), every printed cycle number was wrong, and nothing detected the disagreement.
         ``stabilization_traces`` already derives ``cycle`` by counting within each channel in
         temporal order, so read that instead and the two cannot disagree by construction.
         """
@@ -208,7 +208,7 @@ def _phase_legend(ax, phs):
 
 
 def plot_raw_cycles(idx: StabilizationIndex, pairs):
-    """§1 — raw FSCV loops: first-round vs last-round last cycle per channel (pick V_target)."""
+    """§1. raw FSCV loops: first-round vs last-round last cycle per channel (pick V_target)."""
     viz.ensure_style()
     from matplotlib.lines import Line2D
     import matplotlib.pyplot as plt
@@ -238,7 +238,7 @@ def plot_raw_cycles(idx: StabilizationIndex, pairs):
 
 
 def plot_i_vtarget(idx: StabilizationIndex, pairs):
-    """§2 — I(V_target) vs cycle per channel."""
+    """§2. I(V_target) vs cycle per channel."""
     viz.ensure_style()
     import matplotlib.pyplot as plt
     for dev, tp in pairs:
@@ -261,7 +261,7 @@ def plot_i_vtarget(idx: StabilizationIndex, pairs):
 
 
 def plot_round_drift(idx: StabilizationIndex, pairs):
-    """§3 — round-averaged drift (convergence metric) per channel, tol line drawn."""
+    """§3. round-averaged drift (convergence metric) per channel, tol line drawn."""
     viz.ensure_style()
     import matplotlib.pyplot as plt
     for dev, tp in pairs:
@@ -289,7 +289,7 @@ def plot_round_drift(idx: StabilizationIndex, pairs):
 
 
 def convergence_table(idx: StabilizationIndex, pairs) -> pd.DataFrame:
-    """§4 — per-channel convergence summary: settle_tau, final_drift, n_stable, converged."""
+    """§4. per-channel convergence summary: settle_tau, final_drift, n_stable, converged."""
     rows = []
     for dev, tp in pairs:
         ph_tr = idx.load_phases(dev, tp)

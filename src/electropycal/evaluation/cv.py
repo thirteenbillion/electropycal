@@ -5,11 +5,11 @@ timepoints strictly earlier than the held-out timepoint, so evaluation simulates
 forward deployment and cannot leak future data. ``timepoint``
 must be *numeric and comparable* (e.g. days: D0→0, D20→20).
 
-- ``outer_folds(mode="loto_c_ac")`` — Track 1/2 outer split: test one channel at
+- ``outer_folds(mode="loto_c_ac")`` (Track 1/2 outer split): test one channel at
   ``t_test``; train on all channels at timepoints ``< t_test`` (strict variant).
-- ``outer_folds(mode="loco")`` — Track 3: the test channel is removed from
+- ``outer_folds(mode="loco")`` (Track 3): the test channel is removed from
   training entirely; train on *other* channels at ``< t_test``.
-- ``inner_split`` — nested-CV inner split for hyperparameter/feature selection on
+- ``inner_split``: nested-CV inner split for hyperparameter/feature selection on
   the outer-training set only (``t_val`` = latest timepoint ``< t_test``).
 """
 
@@ -44,10 +44,10 @@ def outer_folds(
     ``loto_c_ac`` / ``loco`` are **forward-chained** (train on timepoints ``< t_test``): the
     deployment-faithful scheme (never trains on the future). ``min_train_times`` requires at least that
     many earlier timepoints before a ``t_test`` is evaluated, which also drops the
-    underpowered earliest folds from the metric — raise it for a steady-state read.
+    underpowered earliest folds from the metric; raise it for a steady-state read.
 
     ``random`` is a **diagnostic only** (NOT deployment-valid): it holds out whole ``(channel,
-    timepoint)`` units — the *same* test unit as forward-chaining — but assigns them to ``n_splits``
+    timepoint)`` units (the *same* test unit as forward-chaining) but assigns them to ``n_splits``
     folds **at random**, ignoring time order (so it may train on later timepoints to predict earlier
     ones). Comparing ``random`` Q² vs forward-chained Q² measures how much the temporal constraint (early
     underpowering + non-stationarity) costs: ``random ≫ forward`` ⇒ the map is learnable but the

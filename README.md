@@ -3,7 +3,7 @@
 Data processing and recalibration for electrochemical sensors (EIS / FSCV).
 
 ```bash
-pip install electropycal
+pip install --upgrade electropycal
 ```
 
 **ElectroPyCal** discovers interpretable PLSR recalibration models for drifting
@@ -37,13 +37,14 @@ recalibration through `recalibrate_invivo` or `deploy --raw`. No pickle; bundles
 **Diagnostics.** Variance partitioning across structural, drift and dose components, and
 measurement-reliability estimates for the response.
 
-Kernel, multi-block and multi-level PLSR, and the mRMR and permutation-`t_max` selectors, are
-registered extension points that raise on use. See `docs/DESIGN.md`.
+Kernel, multi-block and multi-level PLSR are registered extension points that raise on use; the
+mRMR and permutation-`t_max` selectors are documented extension points, not implemented. See
+`docs/DESIGN.md`.
 
 ## Quick start
 
 ```bash
-pip install electropycal
+pip install --upgrade electropycal
 
 # Build a featureset. `demo` is a synthetic dataset, so this runs before you have
 # data of your own; swap it for your own PSTrace export directory when you do.
@@ -53,19 +54,21 @@ electropycal extract --raw demo --out featureset.parquet
 electropycal discover --data featureset.parquet --profile full
 
 # Freeze the selected model on all of the in-vitro data.
-electropycal freeze --run outputs/model_discovery_<timestamp> --data demo     --out outputs/frozen_model
+electropycal freeze --run outputs/model_discovery_<timestamp> --data demo --out outputs/frozen_model
 
-# Recalibrate new in-vivo data with it.
-electropycal deploy --model outputs/frozen_model --data invivo.parquet
+# Recalibrate new in-vivo data with it: your own in-vivo featureset, or --raw <dir>
+# for a raw in-vivo export directory.
+electropycal deploy --model outputs/frozen_model --data my_invivo_featureset.parquet
 ```
 
 `--raw demo` and `--data demo` resolve the bundled synthetic dataset, and synthesize an
-equivalent one if this install has no copy of it, so the commands above run from nothing but
-`pip install`. Note `--profile full` is a real run: budget a couple of hours. Use
-`--profile fast` to see the pipeline work end to end in under a minute.
+equivalent one if this install has no copy of it, so the extract, discover and freeze commands
+above run from nothing but `pip install`; `deploy` needs in-vivo data of your own. Note
+`--profile full` is a real run: budget a couple of hours. Use `--profile fast` to see the
+pipeline work end to end in under a minute.
 
 The repo also ships a Claude skill for in-chat analysis at
-`.claude/skills/lab-analysis/`, which Claude Code picks up automatically in a clone: no
+`.claude/skills/oda/`, which Claude Code picks up automatically in a clone: no
 install step, just ask it for a stat or a figure against your data.
 
 ### Two things worth knowing up front

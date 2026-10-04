@@ -38,8 +38,11 @@ electropycal discover --data featureset.parquet --profile full --n-jobs -1
 
 Re-extract only when new timepoints arrive, and transfer incrementally so only new
 device-sessions move. Version `featureset.parquet` with a date or parameter hash in the
-filename, or keep the run's `run_config.json`, whose extraction pin records every derived
-parameter needed to rebuild it exactly.
+filename, or extract from Python with `extract_dataset(..., pin_out="run_config.json")` and
+keep that file beside the featureset: the extraction pin records every derived parameter
+needed to rebuild it exactly, and `extract_dataset(..., pin=..., pin_mode="extend")` rebuilds
+over a grown corpus without re-anchoring the sessions already there. `electropycal extract`
+does not write a pin.
 
 Prefer `--n-jobs -1` over `--n-jobs "$(nproc)"`. `nproc` returns 1 inside some containers,
 which silently runs the whole sweep serially while looking like it was parallelized.
@@ -72,8 +75,10 @@ They apply at different stages, so do not try to stack them.
 
 ## On a cluster
 
-The task-queue scheduler writes each condition's outputs, fold models included, and is restartable: a
-failed task re-runs only its own condition, so a long sweep survives a preemption.
+The task-queue scheduler writes each condition's outputs, fold models included, as a unit when
+that condition finishes. `electropycal discover` and `run_discovery` do not resume a partial
+sweep: each call starts a fresh timestamped run directory. After a preemption, either rerun the
+sweep or run only the unfinished conditions with `run_condition`.
 
 There is no per-condition CLI index, so the straightforward split is by **target framing and
 profile** across jobs, with joblib handling folds inside each job. The featureset is small
@@ -87,10 +92,10 @@ works.
 #SBATCH --mem=8G
 #SBATCH --time=04:00:00          # a three-seed sweep is ~3 core-hours; give it headroom
 
-# Run directories go on node-local scratch, never a shared mount.
-export TMPDIR=$SLURM_TMPDIR
+# Write the run directory to node-local scratch, never a shared mount, then copy it back.
 electropycal discover --data "$FEATURESET" --profile full --n-jobs -1 \
-                      --seeds 0,1,2 --out "$OUTDIR" --progress
+                      --seeds 0,1,2 --out "$SLURM_TMPDIR/runs" --progress
+cp -r "$SLURM_TMPDIR/runs/." "$OUTDIR/"
 ```
 
 To iterate faster, run a CARS-free queue first and add CARS only for the conditions that
@@ -99,10 +104,10 @@ survive. That is the 7x lever, and it costs nothing but ordering.
 ## Rules of thumb
 
 - Never put raw data in the training loop. One extraction pass, then a frozen feature store.
-- Keep run directories on local disk. A network mount costs 0.257 s per file, and a sweep
-  writes on the order of 130,000 of them.
+- Keep raw data and run directories on local disk. A network mount costs 0.257 s per file, and
+  a raw export is many small files.
 - Sync incrementally and extract incrementally. Only new timepoints cost anything.
 - Change the selector before you change the hardware. CARS is 86% of the cost.
-- For reproducibility, freeze `featureset.parquet` together with the
-  `electropycal_analysis_config.json` used to build it, or keep the run's `run_config.json`.
-  A run is then fully determined by those artifacts.
+- For reproducibility, freeze `featureset.parquet` together with the extraction pin
+  (`run_config.json`) written beside it. A discovery run over that featureset copies the pin
+  into its own `run_config.json`, so the run is then fully determined by those artifacts.

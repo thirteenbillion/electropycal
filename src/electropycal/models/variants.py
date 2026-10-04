@@ -3,7 +3,7 @@
 Each architecture reduces to a linear map + output transform (``models.base``), so
 all serialize/predict uniformly. Implemented: linear, log-transformed, weighted.
 Orthogonal / nonlinear / kernel / multi-block are registered as clear extension
-points (raise on use) — the discovery machinery is complete and adding one is a
+points (raise on use); the discovery machinery is complete and adding one is a
 plug-in, not a rewrite.
 
 Fit on already-D0-normalized, Z-scored features (``scale=False`` inside PLSR).

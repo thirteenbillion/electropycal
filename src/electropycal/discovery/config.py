@@ -2,7 +2,7 @@
 
 A ``Condition`` is one row of the task queue (architecture × feature selector × CV track +
 its hyperparameter grids). A ``Profile`` holds the runtime knobs that let the *same code* run a
-fast test config or a full scientific run — CI uses :data:`FAST`, the once-off real run uses the
+fast test config or a full scientific run: CI uses :data:`FAST`, the once-off real run uses the
 defaults. ``RunData`` is the post-extraction featureset the runner consumes.
 """
 
@@ -25,7 +25,7 @@ TRACK_CV = {"channel": ("loto_c_ac", "channel"),
             "global": ("loto_c_ac", "global"),
             "universal": ("loco", "global"),
             # DIAGNOSTIC only (not deployment-valid): random-split over (channel, timepoint) units,
-            # ignoring time order — compare its Q² to "global" to measure the forward-chaining cost.
+            # ignoring time order; compare its Q² to "global" to measure the forward-chaining cost.
             "random": ("random", "random")}
 
 
@@ -70,14 +70,14 @@ class RunData:
         (the sensitivity featureset has one row per sensor-timepoint and no dose axis).
 
         When ``device`` is present, the CV "channel" (sensor) identity is the
-        composite ``(device, channel)`` — channel 3 on device 2-2 is a different
+        composite ``(device, channel)``: channel 3 on device 2-2 is a different
         sensor than channel 3 on device 2-3."""
         import pandas as pd
         feats = [c for c in df.columns if c not in RESERVED_COLUMNS and c != target]
         X = np.array(df[feats].to_numpy(float), copy=True)
         X[~np.isfinite(X)] = np.nan
         # DROP columns that are entirely undefined (e.g. a band-averaged feature whose sub-band lies
-        # outside the analysis band — ideality_C_band_HF / n_band_HF when band=(2,2000)). Imputing an
+        # outside the analysis band: ideality_C_band_HF / n_band_HF when band=(2,2000)). Imputing an
         # all-NaN column to a constant 0 poisons the PLSR-based selectors (SR/sMC/VIP) with a
         # zero-variance column (their per-fold PLS fit then produces NaN loadings). An empty feature
         # carries no signal, so remove it rather than keep a constant placeholder.
@@ -128,7 +128,7 @@ class Condition:
     k_grid: tuple[int, ...] = (2,)
     threshold_grid: tuple[float, ...] = (0.0,)   # used when the selector has a threshold
     weighted_by: str | None = None           # 'concentration' | 'repeatability_snr' → sample weights (weighted_plsr)
-    transform: str = "linear"                # 'linear' | 'log' — feature+target representation.
+    transform: str = "linear"                # 'linear' | 'log': feature+target representation.
     #: 'log' = the log model on ANY architecture: multiplicative features -> log(x/d0),
     #: additive features unchanged, target fit in log space and predictions exp'd back to NormIpeak.
 
@@ -176,7 +176,7 @@ def effective_min_train_times(min_train_times: int, n_timepoints: int) -> int:
     fold is rejected and the run yields 0 folds / nan metrics silently. This caps the
     value to ``n_timepoints - 1`` (the most training history the data can offer) so the
     run produces folds instead. Returns the value unchanged when there is enough history,
-    or when ``n_timepoints < 2`` (CV is impossible regardless — the caller should surface
+    or when ``n_timepoints < 2`` (CV is impossible regardless; the caller should surface
     that separately). Applied by :func:`~electropycal.discovery.runner.run_condition` so the
     notebook, CLI, and scripts all get the same protection.
     """
@@ -188,12 +188,12 @@ def effective_min_train_times(min_train_times: int, n_timepoints: int) -> int:
 def baseline_queue() -> list[Condition]:
     """The baseline task queue: the simplest architectures/selectors, run first as a reference."""
     return [
-        # 1.1: the simplest baseline — fixed k=2, no k-optimization, no selection, Track 2
+        # 1.1: the simplest baseline: fixed k=2, no k-optimization, no selection, Track 2
         # (global). 1.2 is the same with k swept over (2,3); comparing 1.1 vs 1.2 shows whether
         # k-optimization helps at all.
         Condition("baselines_1.1_linearPLSR", "linear_plsr", "global", None, k_grid=(2,)),
         Condition("baselines_1.2_linearPLSR", "linear_plsr", "global", None, k_grid=(2, 3)),
-        # full log model: log(x/d0) features + log-target on the linear arch — replaces
+        # full log model: log(x/d0) features + log-target on the linear arch, which replaces
         # the old target-only log_plsr. Any architecture can run its log version via transform="log".
         Condition("baselines_1.3_linearPLSR_log", "linear_plsr", "global", None,
                   k_grid=(2, 3), transform="log"),

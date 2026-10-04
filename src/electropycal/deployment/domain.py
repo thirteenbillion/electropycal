@@ -70,7 +70,7 @@ def drift_path(
     """CORAL distance from the in-vitro ``source`` to each in-vivo timepoint.
 
     ``targets_by_time`` maps timepoint → feature matrix. Returns a time-ordered
-    list of ``{timepoint, cov_frob, mean_l2, distance}`` — the drift trajectory to
+    list of ``{timepoint, cov_frob, mean_l2, distance}``: the drift trajectory to
     log during deployment (and a candidate process model should a state-space/Kalman
     variant ever be built).
     """

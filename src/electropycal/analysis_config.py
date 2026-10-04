@@ -1,7 +1,7 @@
 """Shared analysis configuration for the review/QC/discovery notebooks.
 
-The three pre-made notebooks — ``raw_spectra_review``, ``quality_filtering_dashboard``,
-and ``discovery_checkpointed`` — run as **separate** Colab kernels, so a config set in
+The three pre-made notebooks (``raw_spectra_review``, ``quality_filtering_dashboard``,
+and ``discovery_checkpointed``) run as **separate** Colab kernels, so a config set in
 one cannot be seen by the others. To keep the EIS ``band`` and the QC / extraction
 parameters from drifting apart between them, this module persists a single
 ``electropycal_analysis_config.json`` **inside the data ``ROOT``**. Each notebook loads it
@@ -13,7 +13,7 @@ Workflow:
      ``load_analysis_config(ROOT)`` and get exactly those values.
 
 The library primitives (``extract_dataset``, ``channel_quality_report``, the CLI) still take
-explicit parameters — this is a convenience layer for the notebooks, not a new gate.
+explicit parameters; this is a convenience layer for the notebooks, not a new gate.
 """
 
 from __future__ import annotations
@@ -38,8 +38,8 @@ class AnalysisConfig:
     """
 
     band: tuple[float, float] | str = (2.0, 2000.0)   # (lo, hi) Hz; "auto" for data-driven. Study
-    #: default 2–2000 Hz: the f-dependent drift-alignment review (diagnostics §3.1) shows aligned
-    #: drift concentrated ~2 Hz–2 kHz, while retention is flat below the ~10 kHz inductive-onset cliff,
+    #: default 2-2000 Hz: the f-dependent drift-alignment review (diagnostics §3.1) shows aligned
+    #: drift concentrated ~2 Hz-2 kHz, while retention is flat below the ~10 kHz inductive-onset cliff,
     #: so 2 kHz captures the signal at full retention and 2 Hz reaches the low-f aligned band.
     peak_method: str = "direct"                   # "direct" | "chord"
     acceptance: str = "monotonic"                 # extract_dataset acceptance test
@@ -114,13 +114,13 @@ def format_provenance(root: str | Path, target: str | None = None,
                       cfg: AnalysisConfig | None = None) -> str:
     """One human-readable block: the pre-processing **parameters**, the **decisions**, and (if the
     QC-stats companion exists) their **impact** on the dataset. Printed at the start of every discovery
-    run — whatever the entry point (notebook / script / CLI) — so a run always states what
+    run, whatever the entry point (notebook / script / CLI), so a run always states what
     pre-processing produced the featureset it trained on, and why."""
     cfg = cfg or load_analysis_config(root)
     stats = load_qc_stats(root)
     b = cfg.band if isinstance(cfg.band, str) else f"({cfg.band[0]:g}, {cfg.band[1]:g}) Hz"
     L = ["=" * 74,
-         "ElectroPyCal — run provenance  (pre-processing parameters · decisions · impact)",
+         "ElectroPyCal: run provenance  (pre-processing parameters · decisions · impact)",
          "=" * 74,
          "config (electropycal_analysis_config.json):",
          f"  band = {b}   peak_method = {cfg.peak_method}   acceptance = {cfg.acceptance}",
@@ -151,7 +151,7 @@ def format_provenance(root: str | Path, target: str | None = None,
 
 def print_provenance(root: str | Path, target: str | None = None,
                      cfg: AnalysisConfig | None = None) -> None:
-    """Print :func:`format_provenance` (safe: never raises — provenance is informational)."""
+    """Print :func:`format_provenance` (safe: never raises; provenance is informational)."""
     try:
         print(format_provenance(root, target=target, cfg=cfg), flush=True)
     except Exception as e:                                     # never let provenance break a run
@@ -159,7 +159,7 @@ def print_provenance(root: str | Path, target: str | None = None,
 
 
 def resolve_band(root: str | Path, cfg: AnalysisConfig) -> tuple[float, float]:
-    """Resolve ``cfg.band`` to a concrete ``(lo, hi)`` — ``"auto"`` → ``recommended_band(root)``."""
+    """Resolve ``cfg.band`` to a concrete ``(lo, hi)``; ``"auto"`` → ``recommended_band(root)``."""
     if isinstance(cfg.band, str):
         if cfg.band != "auto":
             raise ValueError(f"band must be a (lo, hi) tuple or 'auto', got {cfg.band!r}")

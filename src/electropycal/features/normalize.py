@@ -17,7 +17,7 @@ def to_log_representation(X: np.ndarray, feature_names: list[str]) -> np.ndarray
 
     The linear D0-normalization already gives multiplicative (log-transformable) features as the
     ratio ``x/d0`` and additive features as ``x − d0``. The log model differs *only* in the
-    multiplicative features, which become ``log(x/d0)`` — i.e. ``log`` of those already-normalized
+    multiplicative features, which become ``log(x/d0)``, i.e. ``log`` of those already-normalized
     ratio columns; additive features are left unchanged. This is identical to
     ``d0_normalize(..., log=True)`` applied to the raw features, without needing them.
 
@@ -71,14 +71,14 @@ def d0_normalize_frame(df, feature_cols: list[str], group=("device", "channel"),
     timepoint (see DESIGN §9 step 2).
 
     For each ``group`` (default ``(device, channel)``) the baseline ``d0_row`` is the
-    mean feature vector at that sensor's minimum ``time_col`` — the in-vitro D0 or,
+    mean feature vector at that sensor's minimum ``time_col``: the in-vitro D0 or,
     in vivo, the early in-vivo baseline. Returns a copy with ``feature_cols``
     normalized; non-feature columns are untouched.
 
     That baseline is derived from *whichever timepoints are present*, so extracting over a
     subset that omits a sensor's true D0 session silently re-baselines it onto a later
     timepoint. ``d0_rows`` (``{``:func:`d0_group_key`\\ ``: vector}``, in ``feature_cols``
-    order) supplies recorded baselines instead — a group absent from it falls back to its
+    order) supplies recorded baselines instead; a group absent from it falls back to its
     own earliest timepoint. ``return_d0_rows=True`` additionally returns the baselines
     actually used, for recording into an extraction pin.
     """
@@ -102,7 +102,7 @@ def fit_median_impute(X_train: np.ndarray) -> np.ndarray:
     """Per-column median of ``X_train``, for imputing missing cells.
 
     **Fit on the training split only, then apply to held-out rows** with
-    :func:`apply_median_impute` — the same discipline as :func:`fit_zscore` and the ridge
+    :func:`apply_median_impute`: the same discipline as :func:`fit_zscore` and the ridge
     alpha selection. Computing the median over train and test together would let held-out
     rows influence the values the model is fitted on.
 
@@ -152,7 +152,7 @@ def apply_zscore(X: np.ndarray, mean: np.ndarray, std: np.ndarray) -> np.ndarray
 
 
 def fit_robust(X_train: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Return (median, IQR) for robust scaling — preferred in vivo.
+    """Return (median, IQR) for robust scaling (preferred in vivo).
 
     ``X_robust = (X − median) / IQR`` resists outlier spikes from biological
     events / motion artifacts that standard Z-scoring would over-compress.

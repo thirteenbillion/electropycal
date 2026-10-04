@@ -5,7 +5,7 @@ set is present*, applies them run-wide, and records none of them:
 
 =========================  =======================================================
 ``band`` (when ``"auto"``) a percentile over every EIS spectrum in the corpus
-``device_d0``              ``min(dates)`` per device — the origin of every timepoint
+``device_d0``              ``min(dates)`` per device: the origin of every timepoint
 ``ref_grid``               the first quality-passing channel's EIS frequency grid
 ``d0_row``                 per-sensor baseline = its earliest timepoint in the input
 feature column set         whatever columns the walk happened to emit
@@ -47,7 +47,7 @@ __all__ = ["PIN_SCHEMA_VERSION", "PinMismatch", "load_pin", "session_key",
 #: derived globals plus the per-session row counts that catch a partial fetch.
 PIN_SCHEMA_VERSION = 2
 
-#: Frequency-grid comparison tolerance — the same ``rtol`` the extraction loop uses when
+#: Frequency-grid comparison tolerance: the same ``rtol`` the extraction loop uses when
 #: it decides whether a channel sits on the reference grid.
 GRID_RTOL = 1e-3
 
@@ -87,7 +87,7 @@ def session_key(device: str, date) -> str:
     """Identity of one extraction unit: ``"<device>|<YYYY-MM-DD>"``.
 
     Keyed on the *input* identity (device + folder date) rather than on ``timepoint``,
-    because ``timepoint`` is itself derived from ``device_d0`` — a key that moves with
+    because ``timepoint`` is itself derived from ``device_d0``; a key that moves with
     the thing being pinned cannot verify it.
     """
     return f"{device}|{_date(date).isoformat()}"
@@ -131,7 +131,7 @@ def load_pin(pin) -> dict:
     """Return the ``extraction`` block from ``pin``.
 
     Accepts a path to a JSON run record, an already-parsed run record (with or without
-    the ``"extraction"`` wrapper), or an extraction block directly — so callers can pass
+    the ``"extraction"`` wrapper), or an extraction block directly, so callers can pass
     ``run_config.json`` straight through without knowing how it is nested.
     """
     if isinstance(pin, (str, Path)):
@@ -142,7 +142,7 @@ def load_pin(pin) -> dict:
     missing = {"band_hz", "device_d0", "feature_columns"} - set(block)
     if missing:
         raise PinMismatch(
-            f"pin is missing required key(s) {sorted(missing)} — it does not look like a "
+            f"pin is missing required key(s) {sorted(missing)}; it does not look like a "
             f"schema-{PIN_SCHEMA_VERSION} extraction pin. Regenerate it with "
             f"extract_dataset(..., pin_out=...).")
     ver = pin.get("schema_version")
@@ -168,7 +168,7 @@ def pinned_ref_grids(block: dict) -> dict:
             for t, g in (block.get("ref_grid_hz") or {}).items()}
 
 
-#: ``ref_grid_hz`` key meaning "one grid shared by every device type" — the pre-per-type
+#: ``ref_grid_hz`` key meaning "one grid shared by every device type": the pre-per-type
 #: behaviour, kept so pins written before the grid was split per device type still load.
 ANY_DEVICE_TYPE = "*"
 
@@ -279,7 +279,7 @@ def check_row_counts(block: dict, counts: dict, allow_new: bool = False) -> None
     if bad:
         detail = "; ".join(f"{k}: pinned {w} rows, got {g}" for k, w, g in bad[:8])
         raise PinMismatch(
-            f"{len(bad)} session(s) produced a different row count than the pin — "
+            f"{len(bad)} session(s) produced a different row count than the pin: "
             f"{detail}"
             + ("; ..." if len(bad) > 8 else "")
             + ". The usual cause is an incomplete fetch: a session short its EIS or its "

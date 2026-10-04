@@ -2,7 +2,7 @@
 
 Applies a compact, colorblind-safe matplotlib style: sans-serif ~8 pt type, thin
 axes with the top/right spines removed, frameless legends, and the **Okabe-Ito**
-categorical palette (CVD-safe, assigned in a fixed order — never cycled beyond its
+categorical palette (CVD-safe, assigned in a fixed order; never cycled beyond its
 length). Sequential magnitude uses viridis (perceptually uniform, CVD-safe).
 
 Usage in a notebook's first cell::
@@ -15,14 +15,14 @@ from __future__ import annotations
 
 # Okabe-Ito colorblind-safe categorical palette, fixed order. The middle six are
 # validated (ΔE ≥ 8 under deutan/protan/tritan); black is the single-series / text
-# ink, yellow is last (very light — pair with a marker edge on white).
+# ink, yellow is last (very light; pair with a marker edge on white).
 OKABE_ITO = ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00", "#56B4E9",
              "#000000", "#F0E442"]
 SEQUENTIAL = "viridis"        # magnitude ramp (concentration, timepoint, …)
 
 
 def categorical(n: int) -> list[str]:
-    """Return ``n`` categorical colors in fixed order (repeats only past 8 series —
+    """Return ``n`` categorical colors in fixed order (repeats only past 8 series;
     beyond that prefer small multiples or a composite encoding)."""
     if n <= len(OKABE_ITO):
         return OKABE_ITO[:n]

@@ -4,7 +4,7 @@ Thin wrapper over scikit-learn's ``PLSRegression`` engine with ``scale=False``
 (scaling is done explicitly in the CV loop, so it stays leakage-safe), plus VIP scores and a
 pickle-free asset bundle. Because the fitted linear model *is* its coefficient
 matrix, intercept, and (upstream) normalization scalars, the bundle serializes as
-``.npz`` + a JSON manifest — portable and version-robust (see DESIGN §8).
+``.npz`` + a JSON manifest, portable and version-robust (see DESIGN §8).
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ class PLSRModel:
             Y = Y.reshape(-1, 1)
         n, self._p_full = X.shape
         # Robustness: sklearn's PLS (scale=False) emits NaN loadings on a zero-variance column (its
-        # y-side normalization divides by a zero score) — which happens on band-empty features and on
+        # y-side normalization divides by a zero score), which happens on band-empty features and on
         # CARS/CV row-resamples that make a column constant. Drop those for the fit (they carry no
         # signal → coef 0). Cap k at the numerical RANK too: collinear columns (adjacent-frequency EIS
         # features are near-duplicates) give an effective rank below p, and PLS asks for more components

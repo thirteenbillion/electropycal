@@ -1,0 +1,117 @@
+# Continuous checks for the published package. Three questions, one job each:
+#
+#   tests      does the suite pass on every supported Python, from a clean install of this tree?
+#   published  does `pip install electropycal` from PyPI give a working package on Linux, Windows
+#              and macOS, with the README quick start running end to end?
+#   rebuild    on a release tag: does building this tree reproduce, byte for byte, the files
+#              PyPI serves for that version?
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  # Weekly, so a new release of a dependency that breaks the install shows up without a commit.
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: tests, Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install this tree with the dev extras
+        run: python -m pip install ".[dev]"
+      - name: Record the resolved stack
+        run: python -m pip list --format=freeze | grep -iE '^(electropycal|numpy|scipy|pandas|scikit-learn|pyarrow|joblib)='
+      - name: Run the suite
+        run: python -m pytest -q -p no:cacheprovider
+
+  published:
+    name: pip install electropycal, ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # From PyPI, in an empty directory, so nothing from a checkout can leak in.
+      - name: Install from PyPI
+        run: python -m pip install --upgrade electropycal
+      - name: The README quick start
+        working-directory: ${{ runner.temp }}
+        run: |
+          python -c "import electropycal; print('electropycal', electropycal.__version__)"
+          electropycal --help
+          electropycal extract --raw demo --out featureset.parquet
+          electropycal discover --data featureset.parquet --profile fast
+          RUN=$(ls -d outputs/model_discovery_* | head -1)
+          electropycal freeze --run "$RUN" --data demo --out outputs/frozen_model
+          ls outputs/frozen_model
+          python -m electropycal features > /dev/null
+
+  rebuild:
+    name: rebuild matches PyPI
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build from the tag
+        run: |
+          python -m pip install build
+          python -m build --outdir dist .
+          sha256sum dist/*
+      - name: Compare with PyPI
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, pathlib, sys, time, urllib.request
+          version = os.environ["TAG"].removeprefix("v")
+          url = f"https://pypi.org/pypi/electropycal/{version}/json"
+          for attempt in range(10):
+              try:
+                  served = {u["filename"]: u["digests"]["sha256"]
+                            for u in json.load(urllib.request.urlopen(url, timeout=30))["urls"]}
+                  break
+              except Exception as e:
+                  print(f"PyPI not ready ({e}); retrying")
+                  time.sleep(30)
+          else:
+              sys.exit(f"electropycal {version} is not on PyPI")
+          built = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+                   for p in pathlib.Path("dist").iterdir()}
+          ok = True
+          for name, digest in sorted(served.items()):
+              same = built.get(name) == digest
+              ok &= same
+              print(f"{'MATCH   ' if same else 'MISMATCH'} {name} {digest}")
+          sys.exit(0 if ok and set(built) == set(served) else "the rebuild differs from PyPI")
+          PY

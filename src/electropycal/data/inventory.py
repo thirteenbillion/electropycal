@@ -45,7 +45,7 @@ def recommended_band(root: str | Path, lo: float = 10.0, default_hi: float = 100
     **inside** the band and therefore **fail EIS.1** as genuinely poor electrodes,
     instead of a few early-onset outliers dragging the band down for everyone. Set
     ``onset_percentile=0`` for the strict minimum (every inductive channel stays
-    capacitive in-band — the most conservative band). Falls back to
+    capacitive in-band, the most conservative band). Falls back to
     ``(lo, default_hi)`` when no spectrum goes inductive in range. Pass
     ``devicetype`` (e.g. ``"neurostring"``, or a collection of names) to restrict which
     device types the onsets are taken over.
@@ -97,7 +97,7 @@ def band_retention_curve(root: str | Path, uppers=None, lo: float = 10.0,
     view (does the high-frequency band carry *aligned* signal worth those dropped channels?).
 
     Returns a frame ``[upper_hz, kept, dropped_vs_lowest, kept_frac]`` over ``uppers`` (default: the
-    measured frequency grid above ``lo``). Cheap — one EIS scan, no waveform/FSCV parsing.
+    measured frequency grid above ``lo``). Cheap: one EIS scan, no waveform/FSCV parsing.
     """
     from ..features.extract import _avg_eis
     root = Path(root)
@@ -144,7 +144,7 @@ def index_raw(root: str | Path, band: tuple[float, float] = (10.0, 100_000.0)) -
 
     Columns: ``device, date, timepoint, testtype, channel, signaltype, dose,
     n_replicates, eis_valid`` plus the per-check booleans ``eis_A`` (capacitive),
-    ``eis_B`` (monotonic |Z|), ``eis_C`` (environment) — all NaN for FSCV rows.
+    ``eis_B`` (monotonic |Z|), ``eis_C`` (environment), all NaN for FSCV rows.
     """
     root = Path(root)
     parsed = []
@@ -186,11 +186,11 @@ def index_raw(root: str | Path, band: tuple[float, float] = (10.0, 100_000.0)) -
     return pd.DataFrame(rows)
 
 
-#: the checks that GATE ``overall_valid`` (EIS.1–3 + FSCV.1), in check order — this is the
+#: the checks that GATE ``overall_valid`` (EIS.1-3 + FSCV.1), in check order; this is the
 #: exact gate ``features.extract.extract_dataset(acceptance="monotonic")`` applies.
 QUALITY_CHECKS = ("eis_A", "eis_B", "eis_C", "fscv_monotonic")
 #: all checks shown on the dashboard, including the informational per-concentration noise
-#: floor (FSCV.2) and the peak-in-window diagnostic — neither gates discovery under the default
+#: floor (FSCV.2) and the peak-in-window diagnostic; neither gates discovery under the default
 #: ``acceptance="monotonic"`` (the noise floor gates only under ``"monotonic+snr"``).
 DISPLAY_CHECKS = ("eis_A", "eis_B", "eis_C", "fscv_monotonic", "fscv_noise", "fscv_peak_inwindow")
 CHECK_CODE = {"eis_A": "E.1", "eis_B": "E.2", "eis_C": "E.3",
@@ -210,7 +210,7 @@ CHECK_LABEL = CHECK_NAME             # backward-compatible alias
 def _qc_session(dev, date, entry, *, d0, band, P):
     """QC one (device, date) session -> (ch_rows, dose_rows). Independent of every other
     session (keeps all channels, no shared ref_grid), so it parallelizes with no determinism
-    caveat — concatenating in sorted-session order reproduces the serial tables exactly."""
+    caveat: concatenating in sorted-session order reproduces the serial tables exactly."""
     from ..features.extract import _avg_eis, _avg_fscv
     from ..features.fscv import (PEAK_WINDOW, dose_response_corr, mean_vpeak, noise_floor,
                                  norm_ipeak, peak_at_edge, repeatability_snr, smooth_current)
@@ -267,7 +267,7 @@ def _qc_session(dev, date, entry, *, d0, band, P):
                             require_interior=P["require_interior_peak"]) for rc in reps]
                 rep_nips = [x for x in rep_nips if np.isfinite(x)]
                 rsnr = repeatability_snr(nip, rep_nips)          # NormIpeak / std across cycles
-                # per-dose noise check is the REPRODUCIBILITY SNR (>= min_norm_snr) — the RMS
+                # per-dose noise check is the REPRODUCIBILITY SNR (>= min_norm_snr); the RMS
                 # floor (nip/nf) is kept as `rms_snr` for reference but no longer the pass rule.
                 cpass = bool(np.isfinite(rsnr) and rsnr >= P["min_norm_snr"])
                 dose_rows.append({"device": dev, "date": date, "timepoint": tp,
@@ -333,8 +333,8 @@ def channel_quality_report(root: str | Path, band: tuple[float, float] | str = "
 
     Re-runs the *same* primitives the feature extractor uses (:func:`data.quality.eis_quality`
     on replicate-averaged EIS, :func:`features.fscv.norm_ipeak` / ``noise_floor`` on
-    replicate-averaged FSCV) but keeps **every** channel that was measured — including the
-    ones that fail — so a dashboard can show what dropped and why. Only ``signal`` folders
+    replicate-averaged FSCV) but keeps **every** channel that was measured, including the
+    ones that fail, so a dashboard can show what dropped and why. Only ``signal`` folders
     are considered; the channel roster for a device-timepoint is the union of its EIS
     channels and its ``0nM`` FSCV background channels.
 
@@ -346,15 +346,15 @@ def channel_quality_report(root: str | Path, band: tuple[float, float] | str = "
 
     **Averaging happens before every check**: EIS replicates are averaged
     (:func:`features.extract._avg_eis`) and each concentration's FSCV replicate cycles are
-    averaged (``_avg_fscv``, first ``max_reps`` cycles) *before* quality is evaluated — the
+    averaged (``_avg_fscv``, first ``max_reps`` cycles) *before* quality is evaluated; the
     per-replicate NormIpeak spread is reported only as ``NormIpeak_std`` for display.
 
     **A channel-timepoint is ``overall_valid`` iff all of** EIS A/B/C **and** FSCV
     dose-monotonicity (log-concentration Pearson ``r ≥ monotonic_r_min``, ≥3 concentrations)
-    **pass** — the exact gate ``features.extract.extract_dataset(acceptance="monotonic")``
+    **pass**: the exact gate ``features.extract.extract_dataset(acceptance="monotonic")``
     applies before discovery. The per-concentration reliability check (``conc_pass``) is the
     **reproducibility SNR** ``repeatability_snr = NormIpeak / std(NormIpeak across cycles) ≥
-    min_norm_snr`` — robust where the RMS ``noise_floor`` (residual-dominated, kept as ``rms_snr``)
+    min_norm_snr``, robust where the RMS ``noise_floor`` (residual-dominated, kept as ``rms_snr``)
     reads ~1× even for clear peaks. It is *informational* here (it only gates discovery under
     ``acceptance="monotonic+snr"``). Monotonicity ``r`` is computed on **all** doses' averaged
     NormIpeak, i.e. **before / independent of** the reliability check.
@@ -363,18 +363,18 @@ def channel_quality_report(root: str | Path, band: tuple[float, float] | str = "
     ``has_eis``/``has_fscv`` flags and ``overall_valid=False`` with an "incomplete" reason.
 
     ``band`` is the EIS analysis window ``(lo, hi)`` in Hz, or ``"auto"`` (**default**) to set it
-    from data via :func:`recommended_band` — the same data-driven default ``extract_dataset`` uses,
+    from data via :func:`recommended_band`, the same data-driven default ``extract_dataset`` uses,
     so this inventory's EIS.1 verdicts match the featureset's. ``devices`` restricts the scan to those
     device ids (``None`` = every device at ``root``), so the heavy QC only runs on the selection.
 
-    ``progress=True`` prints timestamped ``[HH:MM:SS]`` lines — one per device-timepoint session
-    with a running elapsed/ETA — so the full parse + QC can be tracked (same style as
+    ``progress=True`` prints timestamped ``[HH:MM:SS]`` lines (one per device-timepoint session
+    with a running elapsed/ETA) so the full parse + QC can be tracked (same style as
     ``discovery.runner.run_condition``). Default off; logging doesn't change the result.
 
     ``n_jobs`` (default **1**, serial) parses + QCs the device-timepoint sessions in parallel worker
     processes (joblib). The sessions are independent (every channel is kept; there is no shared EIS
     ``ref_grid`` as in :func:`~electropycal.features.extract.extract_dataset`), and rows are
-    concatenated in the same sorted order, so **the tables are identical to the serial run** — only
+    concatenated in the same sorted order, so **the tables are identical to the serial run**, only
     faster. ``-1`` uses all cores. The per-session live ETA prints only when serial.
 
     Returns ``(channel_tbl, dose_tbl)`` DataFrames.

@@ -52,7 +52,7 @@ def test_norm_ipeak_matches_expected_ratio():
 
 def test_fscv_features_read_the_same_peak_as_normipeak():
     # V_ox and I_bgd must come from the SAME located peak as NormIpeak, under whichever
-    # peak-detection method is used — so mean_Ibg == NormIpeak's denominator exactly.
+    # peak-detection method is used, so mean_Ibg == NormIpeak's denominator exactly.
     v = np.linspace(-0.4, 1.4, 400)
     background = 100.0 + 50.0 * v
     signal = background + 20.0 * np.exp(-((v - 0.68) / 0.05) ** 2) \
@@ -94,7 +94,7 @@ def test_norm_ipeak_direct_counts_broad_peak_that_chord_misses():
 
 def test_noise_floor_window_sits_below_peak_window():
     from electropycal.features.fscv import NONFARADAIC_WINDOW, PEAK_WINDOW
-    # the noise floor must be measured below the faradaic onset — i.e. not overlap the peak
+    # the noise floor must be measured below the faradaic onset, i.e. not overlap the peak
     # search window, or it counts DA signal as noise and deflates the SNR.
     assert NONFARADAIC_WINDOW[1] <= PEAK_WINDOW[0]
 

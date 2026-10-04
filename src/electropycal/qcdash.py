@@ -1,7 +1,7 @@
 """Quality-filtering dashboard: QC computation + plots as a library API (folds quality_filtering_dashboard).
 
 The notebook used to compute the channel-timepoint quality table, the per-concentration check registry,
-the gating logic, and a dozen plots/sweeps inline — and its QC-stats artifact was assembled from a web of
+the gating logic, and a dozen plots/sweeps inline, and its QC-stats artifact was assembled from a web of
 notebook globals. :class:`QCDashboard` owns all of that: it runs
 :func:`~electropycal.data.inventory.channel_quality_report`, expands it with the per-dose SNR checks and
 the gating decision, exposes one method per figure/table, and assembles+saves the QC-stats companion from

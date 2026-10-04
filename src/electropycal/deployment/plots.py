@@ -2,7 +2,7 @@
 
 Two figures for the recalibration + domain-shift monitor, so the notebook is thin calls and the same
 plots are reproducible from a script. Both take a summary frame (from ``recalibrate`` rows, or from
-``recalibrate_invivo``) and draw the recalibrated response next to the CORAL domain-distance monitor —
+``recalibrate_invivo``) and draw the recalibrated response next to the CORAL domain-distance monitor,
 the confidence signal that flags when the frozen model is extrapolating beyond its validated regime.
 """
 

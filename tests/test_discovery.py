@@ -49,7 +49,7 @@ def test_random_track_diagnostic_runs(data, tmp_path):
 
 def test_multiseed_averages_stochastic_but_collapses_deterministic(data, tmp_path):
     """profile.seeds with >1 seed repeats the nested-CV per seed for a STOCHASTIC selector
-    (CARS), but a deterministic condition (no selector) collapses to a single seed — repeating
+    (CARS), but a deterministic condition (no selector) collapses to a single seed; repeating
     it would be pure waste.
 
     Both record the seed set they *actually* ran over, so a collapsed condition says so

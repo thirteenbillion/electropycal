@@ -2,7 +2,7 @@
 
 Outer layer: conditions run **sequentially** as a decision-gated task queue.
 Intermediate layer: joblib parallelizes outer CV folds inside each condition
-(``Profile.n_jobs``), one single-threaded worker each — call
+(``Profile.n_jobs``), one single-threaded worker each; call
 :func:`pin_blas_single_threaded` *before* importing numpy in the entry process to
 avoid oversubscription. Writes the run directory (``run_config.json``, per-
 condition outputs, ``summary.parquet``, ``report/``).
@@ -50,7 +50,7 @@ def auto_flag_conditions(ranking: list[dict], remaining: list[Condition]) -> dic
     """Advisory downstream exclusions from completed results.
 
     Flags a remaining condition when **every** completed condition sharing its
-    architecture is dominated by the current leader under interval separation — its
+    architecture is dominated by the current leader under interval separation: its
     best-case CI (``rmsep_ci_lo``) is still worse than the leader's worst-case CI
     (``rmsep_ci_hi``). Returns ``{condition_name: reason}``. Purely advisory: the
     caller decides whether to exclude (accept the flag) or include anyway.
@@ -80,20 +80,20 @@ def run_discovery(data: RunData, conditions: list[Condition] | None = None,
                   target: str | None = None) -> Path:
     """Run the discovery queue; return the timestamped run directory.
 
-    Decision gating is **opt-in** — by default every condition runs.
+    Decision gating is **opt-in**: by default every condition runs.
     - ``gate(condition, agg, history) -> bool``: per-condition; return False to stop.
     - ``batch_gate(...) -> bool | list[Condition]``: called after each task-queue
       batch completes. Accepts either ``(batch_num, ranking)`` or
       ``(batch_num, ranking, remaining)`` (arity is auto-detected). Return value:
       ``True`` proceed unchanged; ``False``/``None`` stop the queue; a
       ``list[Condition]`` **replaces the remaining queue** (drop conditions to
-      exclude, or re-insert flagged ones to include) — this is how batches are
+      exclude, or re-insert flagged ones to include); this is how batches are
       edited between runs. Use :func:`auto_flag_conditions` to get advisory
       exclusions from the results so far. The CLI's ``--batched`` mode passes an
       interactive ``batch_gate`` that shows the ranking + flags and applies edits.
 
-    ``progress=True`` emits timestamped ``[HH:MM:SS]`` lines — a per-condition
-    banner plus each condition's own START/fold/DONE lines — for CLI/script runs
+    ``progress=True`` emits timestamped ``[HH:MM:SS]`` lines (a per-condition
+    banner plus each condition's own START/fold/DONE lines) for CLI/script runs
     (default silent, so notebooks and tests stay quiet).
     """
     conditions = conditions or baseline_queue()
@@ -101,12 +101,12 @@ def run_discovery(data: RunData, conditions: list[Condition] | None = None,
     # A full queue can mix linear and log conditions; the log model needs a strictly positive target.
     # For a signed target (e.g. a calibration-curve intercept/curvature, or a slope that can go
     # negative), drop the log conditions here so the run proceeds on the compatible ones instead of
-    # aborting — a single explicit log-on-signed-target call still raises in run_condition.
+    # aborting; a single explicit log-on-signed-target call still raises in run_condition.
     if np.any(np.asarray(data.y, float) <= 0):
         _log_conds = [c for c in conditions if getattr(c, "transform", "linear") == "log"]
         if _log_conds:
             conditions = [c for c in conditions if getattr(c, "transform", "linear") != "log"]
-            print(f"note: target has non-positive values — skipping {len(_log_conds)} log condition(s) "
+            print(f"note: target has non-positive values; skipping {len(_log_conds)} log condition(s) "
                   f"(log needs a strictly positive target); running {len(conditions)} linear conditions.",
                   flush=True)
     if provenance_root is not None:                           # provenance of the pre-processing (informational)

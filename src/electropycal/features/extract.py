@@ -8,7 +8,7 @@ concentration-invariant → shared across that channel-timepoint's concentration
 + FSCV predictor features + ``NormIpeak`` (per concentration, background = the
 ``0nM`` file). Sensor identity is ``(device, channel)``.
 
-Quality-gated: EIS checks A–C (``data.quality``) and the FSCV noise-floor check
+Quality-gated: EIS checks A-C (``data.quality``) and the FSCV noise-floor check
 (``NormIpeak ≥ 3·noise_floor``). Output columns are consumable by
 ``discovery.config.RunData.from_frame``.
 """
@@ -61,7 +61,7 @@ def _report_empty_session(dev, date, n_eis_channels: int, mode: str) -> None:
     if mode == "ignore":
         return
     where = f"{dev}@{date.isoformat() if hasattr(date, 'isoformat') else date}"
-    why = (f"all {n_eis_channels} EIS channel(s) were dropped by a gate — EIS quality, a "
+    why = (f"all {n_eis_channels} EIS channel(s) were dropped by a gate: EIS quality, a "
            f"frequency-grid mismatch against this device type's ref_grid, a missing FSCV "
            f"background, or the FSCV acceptance test"
            if n_eis_channels else
@@ -87,7 +87,7 @@ def _avg_fscv(exp: PSTraceExport, ch: int, max_reps: int | None = 3) -> dict | N
 
     Replicates share the sweep but real exports occasionally differ by a sample;
     truncate to the common length. ``max_reps`` keeps only the first N replicate
-    cycles — use it to drop erroneously-appended extra rounds (the intended protocol
+    cycles; use it to drop erroneously-appended extra rounds (the intended protocol
     is the first ``[0]…[N-1]``); ``None`` averages all cycles present.
     """
     cycles = [v for (c, _), v in sorted(exp.fscv.items()) if c == ch]
@@ -105,8 +105,8 @@ def _avg_fscv(exp: PSTraceExport, ch: int, max_reps: int | None = 3) -> dict | N
 def _first_ref_grid_invivo(items, band, mono_tol) -> dict:
     """In-vivo counterpart of :func:`_first_ref_grid`: one grid per device type.
 
-    Same rule — the in-band sorted grid of the first EIS channel of that device type which
-    passes EIS quality, in sorted ``items`` order — but reading the in-vivo index shape
+    Same rule (the in-band sorted grid of the first EIS channel of that device type which
+    passes EIS quality, in sorted ``items`` order), but reading the in-vivo index shape
     (``baseline``/``live`` slots) rather than ``{dose: path}``. Kept separate rather than
     generalised because the two walks locate their EIS files differently; the *policy* they
     share is the quality gate and the per-type anchor.
@@ -156,7 +156,7 @@ def extract_invivo(root: str | Path, band: tuple[float, float] = (10.0, 100_000.
 
     The EIS reference grid is fixed **per device type** by a quality-gated pre-pass, as
     in-vitro. ``ref_grid_hz`` (``{devicetype: grid}``, e.g. from an extraction pin) supplies it
-    instead — pass the in-vitro grids when preparing data for a frozen model, so in-vivo
+    instead; pass the in-vitro grids when preparing data for a frozen model, so in-vivo
     features land on the same frequency grid the model was trained on rather than on whichever
     channel this directory happened to present first.
     """
@@ -250,7 +250,7 @@ def _accept(candidates: list[tuple[float, float, float, dict]], acceptance: str,
     """Apply the FSCV acceptance test to one channel-timepoint's dose rows.
 
     SNR-based modes threshold the **reproducibility** SNR (``repeatability_snr`` = NormIpeak / std
-    across replicate cycles) — the robust metric — not the residual-dominated RMS-floor SNR.
+    across replicate cycles), the robust metric, not the residual-dominated RMS-floor SNR.
 
     ``min_dose_response_range`` (default ``None`` = off) adds an **amplitude floor** to the monotonic
     test: the correlation ``dose_response_corr`` is scale-invariant, so a clean but *tiny* monotone
@@ -289,7 +289,7 @@ def _first_ref_grid(items, band, mono_tol) -> dict:
     """Deterministic pre-pass: one reference EIS frequency grid **per device type**.
 
     Each device type's grid is the in-band sorted frequency grid of the first EIS channel (in
-    sorted ``items`` order) of that type which passes EIS quality — computed up front so
+    sorted ``items`` order) of that type which passes EIS quality, computed up front so
     parallel workers can share it. Reads only EIS (cheap) and stops at the first accepted
     channel per type. Returns ``{devicetype: grid}``; a type with no qualifying channel is
     absent.
@@ -297,7 +297,7 @@ def _first_ref_grid(items, band, mono_tol) -> dict:
     Per device type, not one grid for the whole corpus: the anchor used to be the globally
     first-sorted passing channel, which made an unrelated device's measurement geometry the
     grid every other device had to match to ``rtol=1e-3`` or be skipped. In this study that
-    anchor was the sole **cfme** electrode setting the grid for all 69 neurostring sensors —
+    anchor was the sole **cfme** electrode setting the grid for all 69 neurostring sensors,
     a coupling that came from sort order, not from anything physical.
     """
     grids: dict = {}
@@ -321,7 +321,7 @@ def _first_ref_grid(items, band, mono_tol) -> dict:
 def _extract_session(dev, date, entry, *, device_d0, band, ref_grid, P):
     """Feature-extract ONE ``(device, timepoint)`` session into its dose rows.
 
-    A pure function of its inputs — ``ref_grid`` is fixed by the caller's deterministic pre-pass
+    A pure function of its inputs: ``ref_grid`` is fixed by the caller's deterministic pre-pass
     (:func:`_first_ref_grid`), so sessions carry no shared state and parallelize cleanly. ``P``
     bundles the scalar extraction params. Returns ``(rows, n_eis_channels)``; concatenating the
     ``rows`` in sorted-session order reproduces the serial output exactly.
@@ -355,7 +355,7 @@ def _extract_session(dev, date, entry, *, device_d0, band, ref_grid, P):
         if bg is None:
             continue
         # smooth the raw background once (removes hardware noise), before any
-        # subtraction — so the background trace and every dose share the same de-noising.
+        # subtraction, so the background trace and every dose share the same de-noising.
         bg["current"] = smooth_current(bg["current"], P["smooth_window"], P["smooth_poly"])
         # DA-independent background-CV predictors (dose-invariant; from the 0 nM cycle only).
         bgfeat = background_features(bg["voltage"], bg["current"])
@@ -391,7 +391,7 @@ def _extract_session(dev, date, entry, *, device_d0, band, ref_grid, P):
             _fin = [x for x in rep_nips if np.isfinite(x)]
             rep_sd = float(np.std(_fin)) if len(_fin) >= 2 else float("nan")
             rsnr = repeatability_snr(nip, rep_nips)
-            # a negative NormIpeak means signal < background at V_ox — non-physical for an
+            # a negative NormIpeak means signal < background at V_ox, non-physical for an
             # oxidation peak (imperfect background matching); drop by default so it neither
             # feeds the monotonic fit nor reaches discovery.
             if not np.isfinite(nip) or (P["drop_negative"] and nip < 0):
@@ -405,7 +405,7 @@ def _extract_session(dev, date, entry, *, device_d0, band, ref_grid, P):
                    "peak_at_edge": peak_at_edge(vpk, PEAK_WINDOW, P["peak_edge_tol"]),
                    "mean_Ibg": mean_ibg(bg_i, sig["current"], v, method=P["peak_method"],
                                         detrend=P["detrend"], baseline_window=P["baseline_window"])}
-            # faradaic peak-SHAPE (deformation-mode characterization; RESERVED — target/diagnostic,
+            # faradaic peak-SHAPE (deformation-mode characterization; RESERVED: target/diagnostic,
             # NOT a predictor: height/area are the NormIpeak numerator and would leak).
             _ps = peak_shape(sig["current"], bg_i, v, method=P["peak_method"], detrend=P["detrend"],
                              baseline_window=P["baseline_window"])
@@ -438,7 +438,7 @@ def _extract_session(dev, date, entry, *, device_d0, band, ref_grid, P):
 def _reliability_session(dev, date, entry, *, device_d0, band, ref_grid, keep, P):
     """Per-replicate feature values for ONE session → list of ``(feature, kind, obs_key, value)``.
 
-    ``obs_key`` is the observation's identity tuple (``(dev, ch, tp)`` for EIS — dose-invariant —
+    ``obs_key`` is the observation's identity tuple (``(dev, ch, tp)`` for EIS, dose-invariant,
     and ``(dev, ch, tp, dose)`` for FSCV), stable across sessions, so parallel workers need no shared
     id counter; the caller maps keys → integer ids in sorted-session order to reproduce the serial
     grouping exactly. ``ref_grid`` is fixed by the caller's pre-pass. ``[]`` if the session lacks an
@@ -526,42 +526,42 @@ def extract_dataset(root: str | Path, band: tuple[float, float] | str | None = N
     """Build ``featureset_extracted`` from a raw PSTrace directory.
 
     FSCV peak definition (see :func:`electropycal.features.fscv.norm_ipeak`):
-    ``peak_method`` is ``"direct"`` (current at V_ox, the **default** — robust to the
+    ``peak_method`` is ``"direct"`` (current at V_ox, the **default**, robust to the
     broad DA peaks in real data) or ``"chord"`` (the chord-baseline height,
     for sharp peaks); ``detrend`` optionally removes a residual baseline slope using
-    ``baseline_window`` (opt-in — can eat broad-onset signal).
+    ``baseline_window`` (opt-in; can eat broad-onset signal).
 
     Raw-signal smoothing: ``smooth_window`` (samples, odd; default
     :data:`~electropycal.features.fscv.FSCV_SMOOTH_WINDOW`, **on**) Savitzky-Golay smooths the
     replicate-averaged signal **and** background cycles to remove hardware noise, *before*
-    background subtraction — so subtraction, NormIpeak, the noise floor, and the predictor
+    background subtraction, so subtraction, NormIpeak, the noise floor, and the predictor
     features all see the same de-noised trace. Set ``smooth_window=0`` to disable.
 
     Quality gates (calibrate against known good/broken channels):
-    - ``band`` — EIS analysis band ``(lo, hi)`` in Hz, **required**: pass a tuple, or ``"auto"``
+    - ``band``: EIS analysis band ``(lo, hi)`` in Hz, **required**: pass a tuple, or ``"auto"``
       to set it from data via :func:`electropycal.data.inventory.recommended_band` (upper bound
       just below the 10th-percentile inductive onset, so the lowest-onset ~10% of channels fall
       in-band and fail EIS.1 as poor electrodes rather than shrinking the band for all). A fixed
       100 kHz band would sit above real onsets and drop most channels.
       ``"auto"`` is **opt-in, not the default**: it is a percentile over every EIS file in the
-      corpus, so it makes the featureset a function of which sessions happen to be present — the
+      corpus, so it makes the featureset a function of which sessions happen to be present: the
       same band over a staged subset is a different band, silently. There is no default because
       neither choice is safe to assume: a fixed band can starve a new corpus, and an automatic one
       cannot be reproduced over a subset. Pass ``pin=`` to reuse a previous run's band instead.
       The study default is ``(2.0, 2000.0)``
       (:class:`~electropycal.analysis_config.AnalysisConfig`).
-    - ``mono_tol`` — EIS ``|Z|``-monotonicity tolerance (check B). Default relaxed to
+    - ``mono_tol``: EIS ``|Z|``-monotonicity tolerance (check B). Default relaxed to
       0.10, relaxed from a stricter 0.05: real capacitive channels show ~5%
       noise-driven ``|Z|`` bumps that 0.05 wrongly rejects, while genuine DC drift is
       far larger and still caught.
-    - ``max_reps`` — keep only the first N replicate cycles per FSCV file (in
+    - ``max_reps``: keep only the first N replicate cycles per FSCV file (in
       acquisition order); default **3** (the protocol's intended ``[0]…[2]`` rounds),
       which drops erroneously-appended extra rounds. ``None`` averages all cycles.
-    - ``acceptance`` — FSCV channel acceptance test at a timepoint:
+    - ``acceptance``: FSCV channel acceptance test at a timepoint:
       ``"monotonic"`` (**default**) keeps **all** of a channel's dose rows iff its
       ``NormIpeak`` is monotone-increasing in log-concentration (dose-response
       ``r ≥ monotonic_r_min``; ``mono_method`` selects ``"pearson"`` linear-in-log
-      or ``"spearman"`` rank/monotonic, the latter robust to saturating responses) —
+      or ``"spearman"`` rank/monotonic, the latter robust to saturating responses),
       a meaningful early-timepoint criterion that a
       single-cycle SNR (hostage to imperfect background matching) is not;
       ``"snr"`` keeps each dose row whose **reproducibility** SNR
@@ -569,70 +569,70 @@ def extract_dataset(root: str | Path, band: tuple[float, float] | str | None = N
       ``"none"`` keeps every finite row.
       (The reproducibility SNR replaced the old ``NormIpeak / noise_floor`` cut: the RMS floor is
       dominated by the background-subtraction residual, so it read ~1× even for obvious peaks.)
-    - ``min_dose_response_range`` (default **None**, off) — amplitude floor complementing the
+    - ``min_dose_response_range`` (default **None**, off): amplitude floor complementing the
       scale-invariant monotonicity ``r``: a channel-timepoint is kept only if its NormIpeak dynamic
       range (max − min over doses) reaches this value. Excludes functionally-dead electrodes that are
       cleanly monotone but *tiny* (``r≈1`` yet flat). Off by default (featureset unchanged); set e.g.
       ``0.05`` to drop near-flat channels from the modeling dataset.
-    - ``drop_negative`` (**default True**) — drop any dose whose ``NormIpeak < 0`` (signal below
+    - ``drop_negative`` (**default True**): drop any dose whose ``NormIpeak < 0`` (signal below
       background at V_ox, non-physical for an oxidation peak) *before* the acceptance test, so a
       spurious negative neither feeds the monotonic fit nor reaches discovery.
-    - ``nonfaradaic_window`` — voltage window the noise floor is measured over
+    - ``nonfaradaic_window``: voltage window the noise floor is measured over
       (default :data:`~electropycal.features.fscv.NONFARADAIC_WINDOW`, which sits below the
       peak-search window so DA signal is not counted as noise).
-    - ``peak_edge_tol`` — a dose whose ``mean_Vpeak`` lands within this of either ``PEAK_WINDOW``
+    - ``peak_edge_tol``: a dose whose ``mean_Vpeak`` lands within this of either ``PEAK_WINDOW``
       bound is flagged ``peak_at_edge=True`` (the peak pinned to the boundary; likely unresolved).
       Reported per row; non-gating.
-    - ``require_interior_peak`` (default **off**) — require the NormIpeak peak to be an *interior*
+    - ``require_interior_peak`` (default **off**): require the NormIpeak peak to be an *interior*
       local maximum; when the in-window argmax pins to a boundary sample, ``norm_ipeak`` returns
       NaN and the dose is dropped (like a missing peak) rather than reading the boundary. Off by
       default (edge-pinning is instead reported non-gating via ``peak_at_edge`` / ``F.pk``).
-    - ``d0_normalize`` (default **True**) — D0-normalize each feature per sensor
+    - ``d0_normalize`` (default **True**): D0-normalize each feature per sensor
       against its own earliest timepoint (additive shift for bounded/phase/log-slope features,
       division for magnitude/area features), so the model learns drift-from-baseline rather than
       absolute per-sensor fabrication differences. The target (``NormIpeak``) and QC columns are not
       touched. This is the same transform deployment applies to in-vivo data, so the frozen model
       sees a consistent representation at train and deploy time. Set ``False`` for the raw features.
-    - ``n_jobs`` (default **1**, serial) — number of worker processes to feature-extract the
+    - ``n_jobs`` (default **1**, serial): number of worker processes to feature-extract the
       device-timepoint sessions in parallel (joblib). Sessions are independent once the shared
       EIS frequency ``ref_grid`` is fixed by a deterministic pre-pass, and results are concatenated
-      in the same sorted order, so **the output is bit-identical to the serial run** — only faster.
+      in the same sorted order, so **the output is bit-identical to the serial run**, only faster.
       ``-1`` uses all cores. The per-session live ETA is shown only when serial (``n_jobs=1``);
       parallel prints a single elapsed/rows summary (workers finish out of order). Extraction is a
-      one-time, cached pass — parallelize it to shorten the first pass, then reuse the parquet.
-    - ``progress`` (default **off**) — emit timestamped ``[HH:MM:SS]`` per-session lines with an
+      one-time, cached pass; parallelize it to shorten the first pass, then reuse the parquet.
+    - ``progress`` (default **off**): emit timestamped ``[HH:MM:SS]`` per-session lines with an
       ETA (like :func:`~electropycal.data.inventory.channel_quality_report`) so CLI/script runs
       show live progress; default silent so notebooks and tests stay quiet.
 
-    - ``device_types`` (default **None** = no filter) — restrict extraction to these device
+    - ``device_types`` (default **None** = no filter): restrict extraction to these device
       types (the ``<devicetype>`` in each session folder name), e.g. ``["neurostring"]``.
       Recorded in the pin. Filtering is *not* a late row filter: it changes which EIS channels
       feed the ``band`` percentile and which device types get a ``ref_grid`` anchor, so
       selecting types after extraction is not the same as extracting only those types. That is
-      why this is pinned rather than left to the caller — the notebook's
+      why this is pinned rather than left to the caller: the notebook's
       ``DEVICE_TYPES=["neurostring"]`` discards cfme rows *after* the fact, while the cfme
       device still influenced extraction.
 
-    - ``on_empty_session`` — what to do when a ``(device, timepoint)`` session yields **no
+    - ``on_empty_session``: what to do when a ``(device, timepoint)`` session yields **no
       rows**: ``"warn"`` (**default**) emits an :class:`EmptySessionWarning` naming the session
       and whether the cause was missing files or every channel failing; ``"raise"`` raises
       :class:`EmptySessionError`; ``"ignore"`` restores the old silence. Default is a warning
       rather than an error because a few sessions legitimately produce zero rows, and raising
-      would block the featureset build — but silence is what let three such sessions sit
+      would block the featureset build, but silence is what let three such sessions sit
       unnoticed, since an absent ``(device, timepoint)`` is otherwise indistinguishable from
       one that was never measured.
 
     Reproducibility (``pin`` / ``pin_out``)
     ---------------------------------------
-    Extraction derives five parameters run-wide from *whatever input set is present* —
+    Extraction derives five parameters run-wide from *whatever input set is present*:
     ``band`` (when ``"auto"``), ``device_d0``, the EIS ``ref_grid``, each sensor's ``d0_row``,
     and the emitted feature column set. All five are functions of the corpus, so extracting
     over a subset silently re-anchors the result rather than failing.
 
-    - ``pin_out`` — write the parameters this run derived to a JSON record
+    - ``pin_out``: write the parameters this run derived to a JSON record
       (:mod:`electropycal.features.pin`, schema 2). The same record is always attached to the
       returned frame as ``df.attrs["extraction_pin"]``, so writing a file is optional.
-    - ``pin`` — a path to that record (or the parsed dict, or a ``run_config.json`` containing
+    - ``pin``: a path to that record (or the parsed dict, or a ``run_config.json`` containing
       it). When given, ``band``, ``device_d0``, ``ref_grid`` and the feature column set are
       taken **verbatim and never recomputed**, and the run raises
       :class:`~electropycal.features.pin.PinMismatch` on a device the pin has not seen, a
@@ -641,7 +641,7 @@ def extract_dataset(root: str | Path, band: tuple[float, float] | str | None = N
       a session short its EIS or 0 nM background yields zero rows without raising anywhere
       else, so a staged extraction would otherwise just be quietly smaller.
 
-    - ``pin_mode`` — ``"reproduce"`` (default) is the behaviour above: the input set must be
+    - ``pin_mode``: ``"reproduce"`` (default) is the behaviour above: the input set must be
       a subset of what the pin recorded, and a session the pin has never seen is an error.
       ``"extend"`` keeps every pinned *anchor* (band, ``device_d0``, ``ref_grid``, the
       per-sensor ``d0_row`` baselines, the feature columns) but permits **new** sessions, so
@@ -652,7 +652,7 @@ def extract_dataset(root: str | Path, band: tuple[float, float] | str | None = N
       rebuild; use ``"reproduce"`` to verify a staged subset.
 
     With a pin, re-extracting a two-session subset reproduces exactly those sessions' rows
-    from the full run — the property that makes analysis over staged data valid.
+    from the full run, the property that makes analysis over staged data valid.
     """
     if peak_method not in ("chord", "direct"):
         raise ValueError(f"peak_method must be 'chord' or 'direct', got {peak_method!r}")
@@ -882,7 +882,7 @@ def replicate_feature_reliability(
     from the averaged featureset via
     :func:`~electropycal.diagnostics.variance.drift_reliability`.
 
-    ``keep`` (optional) restricts to a set of ``(device, channel, timepoint)`` — pass the averaged
+    ``keep`` (optional) restricts to a set of ``(device, channel, timepoint)``; pass the averaged
     featureset's kept sensors so ``σ²_meas`` is measured on the same observations. Uses the same band /
     smoothing / peak conventions as ``extract_dataset``. Returns one row per feature with
     ``sigma2_meas``, ``n_rep`` (mean replicates per observation), ``n_obs``, and ``kind`` (``eis`` |
@@ -891,7 +891,7 @@ def replicate_feature_reliability(
     ``n_jobs`` (default **1**, serial) walks the device-timepoint sessions in parallel worker
     processes (joblib). The shared EIS ``ref_grid`` is fixed by a deterministic pre-pass and the
     observation ids are assigned in the same sorted-session order afterwards, so **the result is
-    byte-identical to serial** — only faster. ``-1`` uses all cores.
+    byte-identical to serial**, only faster. ``-1`` uses all cores.
     """
     from ..diagnostics.variance import measurement_reliability
     root = Path(root)

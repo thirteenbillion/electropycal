@@ -3,11 +3,11 @@
 The default featureset has one row per ``(device, channel, timepoint, concentration)`` with
 ``NormIpeak`` as the target. Because the predictor features (EIS + the FSCV descriptors) are
 **dose-invariant** within a sensor-timepoint, that framing predicts a ~flat NormIpeak across dose
-and cannot express the sensor's *sensitivity* — the dose-response slope, which is the quantity that
+and cannot express the sensor's *sensitivity*: the dose-response slope, which is the quantity that
 actually drifts and needs recalibrating.
 
 :func:`sensitivity_featureset` reframes to **one row per (device, channel, timepoint)** whose target
-is the dose-response **slope** (``sensitivity``) — and ``sensitivity_intercept`` — obtained by an OLS
+is the dose-response **slope** (``sensitivity``), and ``sensitivity_intercept``, obtained by an OLS
 fit of ``NormIpeak`` vs ``log10(concentration)`` over that sensor-timepoint's own doses. Feed the
 result to ``RunData.from_frame(df, target="sensitivity")`` to run the same discovery queue on the
 sensitivity target. Heterogeneous per-device concentrations are handled naturally (the slope is fit
@@ -38,7 +38,7 @@ def _fit_langmuir(conc, y, w=None) -> tuple[float, float]:
     """Fit the saturation curve ``y = Imax·C/(Kd + C)`` → ``(Imax, Kd)`` (>0), or ``(nan, nan)``.
 
     Langmuir is the physically-grounded DA calibration curve (adsorption-controlled; Roberts & Sombers
-    2013): it **saturates** and stays **monotonic** (invertible — needed to recover dose from a measured
+    2013): it **saturates** and stays **monotonic** (invertible, needed to recover dose from a measured
     signal). ``Imax`` ∝ active-site density (drifts with fouling); ``Kd`` is half-saturation. Optional
     per-point SNR weights ``w`` down-weight noisy (low-dose) points. Needs ≥3 distinct positive concs.
     """
@@ -84,10 +84,10 @@ def _fit_power(conc, y, w=None) -> tuple[float, float]:
 
     Physically the **Freundlich isotherm**: adsorption on a *heterogeneous* surface with a distribution
     of binding-site energies gives coverage θ ∝ C^(1/n), so the faradaic current follows a power law.
-    Unlike Langmuir/Hill it does **not** force saturation — ``beta > 1`` is supra-linear (accelerating),
-    ``beta = 1`` linear (Henry's law), ``beta < 1`` sub-linear — so it faithfully fits the straight- or
+    Unlike Langmuir/Hill it does **not** force saturation: ``beta > 1`` is supra-linear (accelerating),
+    ``beta = 1`` linear (Henry's law), ``beta < 1`` sub-linear, so it faithfully fits the straight- or
     upward-curving DA dose curves seen on real (rough / fouled) neurostring interfaces, and stays
-    monotone-invertible for ``a, beta > 0``. Fit as a log–log line (``beta`` = slope, ``a`` = exp
+    monotone-invertible for ``a, beta > 0``. Fit as a log-log line (``beta`` = slope, ``a`` = exp
     intercept) over the positive points; SNR weights down-weight noisy low-dose points. Needs ≥3
     distinct positive concentrations with positive signal.
     """
@@ -119,7 +119,7 @@ def sensitivity_featureset(df: pd.DataFrame, value_col: str = "NormIpeak",
     concentrations, fit ``value_col ~ log10(conc)`` and emit ``sensitivity`` (slope),
     ``sensitivity_intercept``, ``dose_response_r`` and ``n_conc`` alongside the group's
     (dose-invariant) predictor features. Groups with too few concentrations to fit a line are
-    dropped — the same ≥3-dose requirement the monotonicity gate already applies.
+    dropped, the same ≥3-dose requirement the monotonicity gate already applies.
 
     ``sensitivity_curvature`` is the quadratic coefficient of a **separate** ``value_col ~ a + b·log10
     (conc) + c·log10(conc)²`` fit (emitted only when ≥4 distinct concentrations make it identifiable;
@@ -130,14 +130,14 @@ def sensitivity_featureset(df: pd.DataFrame, value_col: str = "NormIpeak",
 
     With ``saturation=True`` (default) it also fits the adsorption-controlled **Langmuir** curve
     ``NormIpeak = Imax·C/(Kd + C)`` (``sat_imax``, ``sat_kd``, ``sat_logkd``) and, with ``hill=True``,
-    the **Hill** curve ``Imax·Cⁿ/(Kdⁿ + Cⁿ)`` (``hill_imax``, ``hill_kd``, ``hill_n``) — *monotone,
+    the **Hill** curve ``Imax·Cⁿ/(Kdⁿ + Cⁿ)`` (``hill_imax``, ``hill_kd``, ``hill_n``), *monotone,
     invertible* calibration models that fit real (saturating) DA dose-responses better than a line or a
     (non-monotone) quadratic. ``sat_imax``/``hill_imax`` ∝ active-site density (drifts with fouling);
     they are positive-magnitude candidate targets via ``RunData.from_frame(df, target="sat_imax")``.
 
     **SNR-weighted fits.** When a ``weight_col`` (default ``repeatability_snr``) is present, every
     per-sensor-timepoint curve fit (linear slope/intercept, quadratic, Langmuir, Hill) is weighted by
-    each dose's SNR, so noisy low-dose points are down-weighted — a cleaner target than the unweighted
+    each dose's SNR, so noisy low-dose points are down-weighted: a cleaner target than the unweighted
     fit. This is *separate* from ``weighted_plsr`` (which weights samples in the discovery model, not
     the dose-response fit that produces the target).
 
@@ -147,7 +147,7 @@ def sensitivity_featureset(df: pd.DataFrame, value_col: str = "NormIpeak",
     id_cols = [c for c in ("device", "channel", "timepoint") if c in df.columns]
     if "channel" not in id_cols or "timepoint" not in id_cols:
         raise ValueError("sensitivity_featureset needs 'channel' and 'timepoint' columns")
-    # NUMERIC predictor columns only — stray label columns (e.g. a 'devicetype'/'sensor' string added
+    # NUMERIC predictor columns only: stray label columns (e.g. a 'devicetype'/'sensor' string added
     # downstream) are not features and would break the per-group mean.
     feat_cols = [c for c in df.columns if c not in set(RESERVED_COLUMNS) and c != "time_index"
                  and pd.api.types.is_numeric_dtype(df[c])]
@@ -185,7 +185,7 @@ def sensitivity_featureset(df: pd.DataFrame, value_col: str = "NormIpeak",
             himax, hkd, hn = _fit_hill(cc, y, w)
             row.update(hill_imax=himax, hill_kd=hkd, hill_n=hn)
         if power:
-            # Freundlich power law y = a·C^beta — non-saturating (fits straight / upward curves),
+            # Freundlich power law y = a·C^beta: non-saturating (fits straight / upward curves),
             # monotone-invertible. beta>1 supra-linear, =1 linear, <1 sub-linear.
             pa, pb = _fit_power(cc, y, w)
             row.update(power_a=pa, power_beta=pb)

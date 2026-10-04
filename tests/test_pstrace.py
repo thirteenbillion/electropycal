@@ -66,7 +66,7 @@ def test_eis_quality_passes_for_capacitive_spectrum(tmp_path):
 
 def test_eis_quality_A_flags_inband_inductive_excursion(tmp_path):
     # check A is now all-in-band: a band that INCLUDES the 100 kHz inductive point
-    # (Im > 0) fails A even though the lowest frequency is capacitive — a single
+    # (Im > 0) fails A even though the lowest frequency is capacitive; a single
     # low-f anchor would have wrongly passed it.
     s = read_pstrace(_write(tmp_path)).eis[(3, 0)]
     q = eis_quality(s["freq"], s["z_real"], s["z_imag"], band=(10, 100_000))

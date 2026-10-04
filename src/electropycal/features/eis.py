@@ -1,8 +1,8 @@
 """EIS feature extraction: impedance spectra to electrode-state features.
 
 **Sign convention.** This module expects ``Z = Z' + j·Im(Z)`` with ``Im(Z) < 0`` for a capacitive
-interface. A PSTrace export labels its column ``Z'' / Ohm`` but stores ``-Im(Z)`` there — positive
-at low frequency for a capacitive interface — so :mod:`electropycal.data.pstrace` negates it on
+interface. A PSTrace export labels its column ``Z'' / Ohm`` but stores ``-Im(Z)`` there (positive
+at low frequency for a capacitive interface), so :mod:`electropycal.data.pstrace` negates it on
 ingest. Verify that sign on a known-capacitive channel of your own exports before trusting derived
 capacitances, since it is a property of the instrument software rather than of the physics.
 Capacitances carry an explicit sign correction so ``C_s, C_p, tau > 0``. The ``local_n`` derivative
@@ -53,8 +53,8 @@ def eis_global_features(freqs: np.ndarray, z_real: np.ndarray, z_imag: np.ndarra
     ``inductive_onset_hz`` (frequency location of onset, Hz).
 
     The band-averaged features use the in-band ``freqs``/``z_real``/``z_imag`` passed in. The two
-    inductive-degradation predictors are instead computed over ``full_spectrum`` — an optional
-    ``(freq, z_real, z_imag)`` covering the **entire measured range** — so they are **independent of
+    inductive-degradation predictors are instead computed over ``full_spectrum`` (an optional
+    ``(freq, z_real, z_imag)`` covering the **entire measured range**), so they are **independent of
     the analysis band**. This matters because a channel-timepoint only reaches feature extraction by
     passing EIS.1 (capacitive at every in-band point), which would otherwise pin the in-band onset at
     the band ceiling for every row (zero variance) and keep ``min_neg_phase`` blind to any inductive
@@ -84,13 +84,13 @@ def eis_global_features(freqs: np.ndarray, z_real: np.ndarray, z_imag: np.ndarra
         ff = ff[fo]
         fzr = np.asarray(full_spectrum[1], float)[fo]
         fzi = np.asarray(full_spectrum[2], float)[fo]
-    # min_neg_phase (degrees): the closest the phase gets to 0 across the measured range — the
+    # min_neg_phase (degrees): the closest the phase gets to 0 across the measured range: the
     # least-capacitive / most-inductive point. -phase > 0 while capacitive; goes negative if the
     # interface is inductive anywhere in range. Severity of inductive degradation. DA-independent.
     neg_phase = -np.degrees(np.arctan2(fzi, fzr))
     out["min_neg_phase"] = float(np.min(neg_phase))
     # inductive_onset_hz (Hz): the lowest frequency at which the interface reads inductive
-    # (Im(Z) >= 0) — the frequency *location* of onset, censored at the top of the measured range
+    # (Im(Z) >= 0): the frequency *location* of onset, censored at the top of the measured range
     # when it never goes inductive. Lower = onset intrudes to lower frequency = more degraded.
     # DA-independent. (Full-range, so it is not pinned to the band ceiling by the EIS.1 gate.)
     ind = np.flatnonzero(fzi >= 0)

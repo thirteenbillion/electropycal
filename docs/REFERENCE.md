@@ -26,7 +26,7 @@ not a fixed default at all but something you set for the run in front of you.
 | `acceptance` | `"monotonic"` | Locked | Dose-response acceptance test for a channel-timepoint. |
 | `mono_tol` | `0.10` | Locked | EIS.2 \|Z\|-monotonicity tolerance. |
 | `min_norm_snr` | `3.0` | Locked | Per-dose reproducibility-SNR cutoff. |
-| `monotonic_r_min` | `0.6` | Locked | Min dose–log-conc correlation (FSCV.1). |
+| `monotonic_r_min` | `0.6` | Locked | Min correlation of response against log-concentration (FSCV.1). |
 | `mono_method` | `"pearson"` | Locked | Dose-response correlation type (`"pearson"` \| `"spearman"`). |
 | `max_reps` | `3` | Locked | First N FSCV replicate cycles used. |
 | `gate_on` | `{eis:True, monotonic:True, snr_all:False, peak_in_window:False}` | Locked | Which QC gates are active by default. |
@@ -34,7 +34,7 @@ not a fixed default at all but something you set for the run in front of you.
 ### 1.2 `Profile`, runtime knobs (`discovery.config`)
 | Param | Full default | `FAST` (tests) | Status | Meaning |
 |-------|--------------|----------------|--------|---------|
-| `seeds` | `(0)` | `(0)` | Per-run | RNG seeds; multi-seed only firms up stochastic selectors (CARS/MI). |
+| `seeds` | `(0,)` | `(0,)` | Per-run | RNG seeds; multi-seed only firms up stochastic selectors (CARS/MI). |
 | `min_train_times` | `3` | `3` | Locked | Earliest-history requirement for a forward-chained fold (auto-capped by `effective_min_train_times`). |
 | `n_boot` | `2000` | `200` | Locked | Bootstrap CI resamples. |
 | `n_jobs` | `1` | `1` | Per-run | joblib workers over outer folds (raise for multi-core). |
@@ -73,7 +73,8 @@ featureset in `run_config.json` instead.
 Fixed windows and constants: `PEAK_WINDOW = (0.4, 1.0) V` for the oxidation-peak search, and
 EIS sub-bands `BANDS_HZ = LF (10-300), MF (300-3000), HF (3000-100000)` Hz. Note that the HF
 sub-band is **empty under the default band (2, 2000)**, so `ideality_C_band_HF` and `n_band_HF`
-come out all-NaN and are dropped at `RunData.from_frame`. Feature-schema version: 6.
+come out all-NaN and are dropped at `RunData.from_frame`. Feature-schema version
+(`features.extract.FEATURE_SCHEMA_VERSION`): 6.
 
 ### 1.4 Fixed modeling conventions
 - **D0-normalization: ON**, per-sensor drift-from-baseline; **multiplicative** for magnitudes, **additive**
@@ -81,10 +82,13 @@ come out all-NaN and are dropped at `RunData.from_frame`. Feature-schema version
   0.22), not by Q².
 - **Leakage-safe predictors**: EIS + 0 nM-background FSCV only; faradaic peak features are RESERVED targets.
 - **Negative-dose rows** (`NormIpeak < 0`) dropped as non-physical.
-- **Saturating targets (`sat_*`, `hill_*`) OFF by default**, `Kd` unidentifiable on non-saturating data.
-- **Default modeling target** (provisional): `sensitivity` (dose-response slope): locked by the A2 admissibility
-  screen: identifiable, invertible, and it moves. Whether it is predictive on a given dataset
-  is an empirical question that dataset has to answer.
+- **Saturating targets (`sat_*`, `hill_*`) are not a default target.** `sensitivity_featureset` fits
+  them, but `Kd` is unidentifiable on non-saturating data.
+- **Recommended modeling target** (provisional): `sensitivity` (dose-response slope), chosen by the
+  admissibility screen in `evaluation.admissibility`: identifiable, invertible, and it moves. The
+  CLI's `--target` and the notebooks' `TARGET` default to per-dose `normipeak`, so pass
+  `sensitivity` explicitly. Whether either is predictive on a given dataset is an empirical
+  question that dataset has to answer.
 
 ### 1.5 How each parameter is surfaced
 
@@ -118,11 +122,12 @@ currently exposed.
 | **Condition** | `architecture="linear_plsr"` | `discovery/config.py` `Condition` | model type per queue entry (`linear/log/weighted/orthogonal/nonlinear_plsr`) | edit `baseline_queue()` |
 | Condition | `track="global"` | `config.py` | CV track: `channel` (Track 1) \| `global` (Track 2) \| `universal` (Track 3/LOCO) \| `random` (**diagnostic only**, random-split, not deployment-valid; compare to `global` to measure the forward-chaining cost) | edit `baseline_queue()` |
 | Condition | `selector=None` | `config.py` | feature selector: `vip/sr/smc/mi/cars/icc/icc+cars` | edit `baseline_queue()` |
-| Condition | `k_grid=(2)`, `threshold_grid=(0.0)` | `config.py` | inner-loop LV counts / selector thresholds swept | edit `baseline_queue()` |
-| Condition | `weighted_by=None` | `config.py` | `'concentration'` → sample weights (weighted PLSR) | edit `baseline_queue()` |
+| Condition | `k_grid=(2,)`, `threshold_grid=(0.0,)` | `config.py` | inner-loop LV counts / selector thresholds swept | edit `baseline_queue()` |
+| Condition | `weighted_by=None` | `config.py` | `'concentration'` or `'repeatability_snr'` → sample weights (weighted PLSR) | edit `baseline_queue()` |
+| Condition | `transform="linear"` | `config.py` | `"log"` = the full log model (log features and log target, back-transformed) | edit `baseline_queue()` |
 | Architecture | `n_orth=1` (orthogonal), `degree=2` (nonlinear) | `models/variants.py` `build` | O-PLS orthogonal comps / poly degree | Python arg (fixed in queue) |
 | **Profile (runtime)** | `n_jobs=1` | `config.py` `Profile` | joblib workers over CV folds | **CLI `--n-jobs`** |
-| Profile | `seeds=(0)` | `config.py` | CARS seeds (multi-seed stability) | Python arg; **CLI `--seed`** sets the run seed |
+| Profile | `seeds=(0,)` | `config.py` | seed set for the stochastic selectors (CARS/MI), averaged across | Python arg; **CLI `--seeds 0,1,2`** (`--seed` is the separate CV-fold seed) |
 | Profile | `min_train_times=3` | `config.py` | min prior timepoints before a `t_test` is used. **Nested CV needs ≥3 timepoints** (inner-train < t_val < t_test); with only 2 collected timepoints set this to 1 and expect 0 folds until a 3rd exists | Python arg |
 | Profile | `n_boot=2000` | `config.py` | bootstrap RMSEP-CI resamples (`FAST`=200) | Python arg; **CLI `--profile`** |
 | Profile | `cars={k_max:5, n_generations:50, n_folds:5, timebox_patience:10}` | `config.py` | CARS budget + stall/time-box valve | Python arg (`Profile(cars=…)`) |
@@ -132,17 +137,17 @@ currently exposed.
 | Discovery run | `batch_gate=None` | `scheduler.py` | per-batch review/edit: return `bool` or a `list[Condition]` replacing the remaining queue (include/exclude) | Python arg; **CLI `--batched`** (interactive) |
 | Discovery run | `out_root="outputs"`, `seed=0` | `scheduler.py` | output root / RNG seed | **CLI `--out` / `--seed`** |
 | Discovery run | `cap_min_train_times=True` | `scheduler.py` | **safety valve:** auto-lower `min_train_times` on a short series so CV yields folds instead of 0/nan | Python arg; **CLI `--min-train-times`** overrides |
-| **Target framing** | `TARGET` (`normipeak`) | `features/targets.py`; CLI `--target` | recalibration target: per-dose `normipeak` \| `sensitivity`/`_intercept`/`_curvature` \| `sat_imax`/`sat_kd`/`sat_logkd` \| `hill_imax`/`hill_kd`/`hill_n` | **CLI `--target`**; notebook `TARGET` / `TARGETS` |
+| **Target framing** | `TARGET` (`normipeak`) | `features/targets.py`; CLI `--target` | recalibration target: per-dose `normipeak` \| `sensitivity`/`_intercept`/`_curvature` \| `sat_imax`/`sat_kd`/`sat_logkd` \| `hill_imax`/`hill_kd`/`hill_n` | **CLI `--target`** (`normipeak` or `sensitivity`); notebook `TARGET` / `TARGETS` |
 | Target framing | `saturation=True`, `hill=True` | `features/targets.py` `sensitivity_featureset` | also fit Langmuir / Hill saturation curves (emit `sat_*` / `hill_*`) | Python arg |
 | Target framing | `weight_col="repeatability_snr"` | `features/targets.py` | SNR-weight the per-sensor-timepoint curve fits (down-weight noisy low-dose points) | Python arg |
-| Normalization | `d0_normalize=True` | `features/extract.py` | per-sensor drift-from-baseline. **Extraction-level, not per-condition**, toggling it means re-extracting the featureset, not editing the queue | Python arg; **CLI `--no-d0-normalize`** |
+| Normalization | `d0_normalize=True` | `features/extract.py` | per-sensor drift-from-baseline. **Extraction-level, not per-condition**: toggling it means re-extracting the featureset, not editing the queue | Python arg; **CLI `--no-d0-normalize`** |
 | Metrics | `alpha=0.05` | `evaluation/metrics.py` | CI level (95%) | fixed |
 | **Deployment** | `architecture`, `k`, `feature_index=None` | `deployment/deploy.py` `freeze_model` | the model **you** freeze/deploy | Python arg |
 | Deployment | `scaler="robust"` | `deploy.py` | in-vivo scaler: robust median/IQR vs `"zscore"` | Python arg |
 | Deployment | `sample_weight=None`, `d0_kinds=None` | `deploy.py` | optional WLS weights / D0 kinds | Python arg |
 | Deployment | `with_domain=True` | `deploy.py` `recalibrate` | attach CORAL domain-distance flag | Python arg |
 | Deployment | `eps=1e-6`, `include_mean=True` | `deployment/domain.py` | CORAL regularization / mean term | Python arg |
-| **Stabilization** (optional) | `tol=0.01`, `patience=10`, `smooth_window=5` | `data/stabilization.py` | convergence plateau criterion | Python arg; `stabilization_review` nb |
+| **Stabilization** (optional) | `tol=0.01`, `patience=10`, `smooth_window=5` | `data/stabilization.py` `check_converged` | convergence plateau criterion. `stabreview.StabilizationIndex`, which the notebook uses, has its own defaults: `tol=0.02`, `patience=3`, `smooth_window=3` | Python arg; `stabilization_review` nb |
 | Stabilization | `v_target=0.7`, `cycles_per_round=20` | `data/stabilization.py` `stabilization_traces` | oxidation potential tracked / cycles per round | Python arg; `stabilization_review` nb |
 
 **Most common edits for a real run:** `--profile full --n-jobs <cores>` on the CLI;
@@ -184,7 +189,7 @@ types are emitted as `<type>_fNN` across the in-band grid.
 | `bg_cap` | predictor · mult | mean \|i_anodic − i_cathodic\|/2 over window | double-layer-capacitance proxy |
 | `bg_switch` | predictor · mult | bg current at anodic switching potential | electrode-window edge / fouling |
 
-### 2.3 Predictors, temporal (experiment-only; added by notebook `add_temporal`, not `extract_dataset`)
+### 2.3 Predictors, temporal (catalogued but not emitted by `extract_dataset`; add them yourself)
 | Feature type | Default | Derivation | Purpose |
 |--------------|---------|------------|---------|
 | `time_since_baseline` | predictor · mult | days since the sensor's first timepoint | aging covariate (known at deployment) |
@@ -198,13 +203,13 @@ types are emitted as `<type>_fNN` across the in-band grid.
 | `peak_height` | target · mult | bg-subtracted faradaic peak height | NormIpeak numerator |
 | `peak_area` | target · mult | bg-subtracted peak area / charge | integrated response |
 | `peak_fwhm` | target · mult | bg-subtracted peak FWHM | peak kinetics/shape |
-| `sensitivity` | target · mult | dose-response slope (NormIpeak vs log10[DA]) | **default recalibration target** |
+| `sensitivity` | target · mult | dose-response slope (NormIpeak vs log10[DA]) | **recommended recalibration target** (§1.4) |
 | `sensitivity_intercept` | target · mult | dose-response intercept (signed) | DC level (covariate) |
 | `sensitivity_curvature` | target · mult | dose-response quadratic curvature (signed) | shape (covariate) |
 | `power_beta` | target · mult | Freundlich exponent β (NormIpeak=a·Cᵝ) | non-saturating invertible framing |
 | `power_a` | target · mult | Freundlich coefficient a | gain at unit concentration |
-| `sat_imax` / `sat_kd` / `sat_logkd` | target · mult | Langmuir Imax·C/(Kd+C) fit | saturation model (OFF by default) |
-| `hill_imax` / `hill_kd` / `hill_n` | target · mult | Hill Imax·Cⁿ/(Kdⁿ+Cⁿ) fit | cooperative saturation (OFF by default) |
+| `sat_imax` / `sat_kd` / `sat_logkd` | target · mult | Langmuir Imax·C/(Kd+C) fit | saturation model (not a default target) |
+| `hill_imax` / `hill_kd` / `hill_n` | target · mult | Hill Imax·Cⁿ/(Kdⁿ+Cⁿ) fit | cooperative saturation (not a default target) |
 
 ### 2.5 Metadata / QC (RESERVED; describe the row)
 `noise_floor`, `snr`, `rms_snr`, `repeatability_snr`, `rep_std`, `dose_response_r`, `peak_at_edge`,
@@ -216,7 +221,7 @@ under-estimate, common at low dose; a hard voltage-sweep-span limit, not a filte
 
 ### 2.6 `RESERVED_COLUMNS` (never predictors)
 `device, channel, sensor_id, timepoint, concentration, NormIpeak, noise_floor, snr, rms_snr,
-repeatability_snr, rep_std, peak_at_edge, dose_response_r, peak_height, peak_area, peak_fwhm, sensitivity,
+repeatability_snr, rep_std, peak_at_edge, peak_area_clipped, dose_response_r, peak_height, peak_area, peak_fwhm, sensitivity,
 sensitivity_intercept, sensitivity_curvature, n_conc, sat_imax, sat_kd, sat_logkd, hill_imax, hill_kd,
 hill_n, power_a, power_beta`
 
@@ -228,27 +233,27 @@ hill_n, power_a, power_beta`
 | `channel` | `loto_c_ac` | channel | forward-chained | per-sensor (Track 1); few folds |
 | `global` | `loto_c_ac` | global | forward-chained | pooled (Track 2); well-powered |
 | `universal` | `loco` | global | forward-chained | LOCO transfer (Track 3) |
-| `random` | `random` | random | No: diagnostic only | non-stationarity probe (E1) |
+| `random` | `random` | random | No: diagnostic only | non-stationarity probe |
 
 ---
 
 ## 4. Baseline queue (`baseline_queue()`, 14 conditions)
 | Condition | Arch | Track | Selector | k_grid | threshold | weighted_by | transform |
 |-----------|------|-------|----------|--------|-----------|-------------|-----------|
-| baselines_1.1_linearPLSR | linear_plsr | global |, | (2) |, |, | linear |
-| baselines_1.2_linearPLSR | linear_plsr | global |, | (2,3) |, |, | linear |
-| baselines_1.3_linearPLSR_log | linear_plsr | global |, | (2,3) |, |, | log |
-| baselines_1.4_weightedPLSR | weighted_plsr | global |, | (2,3) |, | concentration | linear |
-| baselines_1.4_weightedPLSR_log | weighted_plsr | global |, | (2,3) |, | concentration | log |
-| baselines_1.5_orthogonalPLSR | orthogonal_plsr | global |, | (2,3) |, |, | linear |
-| baselines_1.6_nonlinearPLSR | nonlinear_plsr | global |, | (2,3) |, |, | linear |
-| baselines_1.7_snrWeightedPLSR | weighted_plsr | global |, | (2,3) |, | repeatability_snr | linear |
-| channelspecific_2.1_linearPLSR | linear_plsr | channel |, | (2,3) |, |, | linear |
-| pNproblem_3.1_SR | linear_plsr | global | sr | (2,3) | (0.5,1.0) |, | linear |
-| pNproblem_3.1_VIP | linear_plsr | global | vip | (2,3) | (0.5,1.0) |, | linear |
-| pNproblem_3.1_sMC | linear_plsr | global | smc | (2,3) | (2.0,6.0) |, | linear |
-| pNproblem_3.2_CARS | linear_plsr | global | cars | (2,3) |, |, | linear |
-| newchannels_4.1_CARS | linear_plsr | universal | cars | (2,3) |, |, | linear |
+| baselines_1.1_linearPLSR | linear_plsr | global | - | (2) | - | - | linear |
+| baselines_1.2_linearPLSR | linear_plsr | global | - | (2,3) | - | - | linear |
+| baselines_1.3_linearPLSR_log | linear_plsr | global | - | (2,3) | - | - | log |
+| baselines_1.4_weightedPLSR | weighted_plsr | global | - | (2,3) | - | concentration | linear |
+| baselines_1.4_weightedPLSR_log | weighted_plsr | global | - | (2,3) | - | concentration | log |
+| baselines_1.5_orthogonalPLSR | orthogonal_plsr | global | - | (2,3) | - | - | linear |
+| baselines_1.6_nonlinearPLSR | nonlinear_plsr | global | - | (2,3) | - | - | linear |
+| baselines_1.7_snrWeightedPLSR | weighted_plsr | global | - | (2,3) | - | repeatability_snr | linear |
+| channelspecific_2.1_linearPLSR | linear_plsr | channel | - | (2,3) | - | - | linear |
+| pNproblem_3.1_SR | linear_plsr | global | sr | (2,3) | (0.5,1.0) | - | linear |
+| pNproblem_3.1_VIP | linear_plsr | global | vip | (2,3) | (0.5,1.0) | - | linear |
+| pNproblem_3.1_sMC | linear_plsr | global | smc | (2,3) | (2.0,6.0) | - | linear |
+| pNproblem_3.2_CARS | linear_plsr | global | cars | (2,3) | - | - | linear |
+| newchannels_4.1_CARS | linear_plsr | universal | cars | (2,3) | - | - | linear |
 
 ---
 
@@ -280,6 +285,7 @@ hill_n, power_a, power_beta`
 | `electropycal_analysis_config.json` | `save_analysis_config` | the QC/extraction parameters used |
 | `electropycal_qc_stats.json` | `save_qc_stats` | QC yields / per-gate dropout (the evidence) |
 | `diagnostics_featureset__<hash>.parquet` | `diagnostics_review` cache | cached featureset, keyed by schema and parameters |
+| `discovery_featureset__<hash>.parquet` | `discovery_checkpointed` cache | the same, for the discovery notebook's own extraction |
 
 ---
 
@@ -287,14 +293,15 @@ hill_n, power_a, power_beta`
 
 ### 6.1 Module layout
 ```
-data/         io, inventory, pstrace (ingestion), quality, schema (feature dict + RESERVED_COLUMNS),
-              stabilization, synthetic
-features/     extract (extractor), eis, fscv, normalize (D0), targets, catalog
+data/         io, inventory, paths (path validation errors), pstrace (ingestion), quality,
+              schema (feature dict + RESERVED_COLUMNS), stabilization, synthetic
+features/     extract (extractor), eis, fscv, normalize (D0), targets, catalog, pin (extraction pin)
 models/       base, plsr, variants (linear/weighted/orthogonal/nonlinear PLSR)
 selection/    cars, univariate (MI), icc, pseudo_multivariate (SR/sMC/VIP)
 discovery/    config (Condition/RunData/Profile/baseline_queue), runner, baseline, scheduler,
-              batch (BatchRunner), review (results-review plots)
-evaluation/   cv (folds/tracks), metrics (+ fit_ridge / ALPHA_GRID inner-CV penalty), framing,
+              folds (per-fold model storage), batch (BatchRunner), review (results-review plots)
+evaluation/   cv (folds), tracks (per-track aggregation), metrics (+ fit_ridge / ALPHA_GRID
+              inner-CV penalty), framing,
               multioutput (PLS2), classify, baselines (time-only / naive / feature-free
               channel-persistence controls), hierarchical, stratify, admissibility
 deployment/   deploy, domain (domain-shift / LOCO transfer), plots (recalibration monitors)
@@ -331,16 +338,18 @@ shared `AnalysisConfig` value, §1.1 is the one a configured run actually gets.
 
 #### `electropycal.features`
 - `eis.eis_features(freqs, z_real, z_imag, smooth=True) -> dict` (7 arrays);
-  `eis_global_features(...) -> dict` (12 scalars).
-- `fscv.norm_ipeak(signal, background, voltages, v_window=(0.6,0.8), method="chord",
-  detrend=False, baseline_window=(-0.1,0.2))`, `method="direct"` = current at V_ox
-  (recommended for broad DA peaks); `mean_vpeak`, `mean_ibg`, `noise_floor`
-  (also takes `detrend`), `anodic_sweep`.
+  `eis_global_features(...) -> dict` (14 scalars).
+- `fscv.norm_ipeak(signal, background, voltages, v_window=(0.4,1.0), method="direct",
+  detrend=False, baseline_window=(-0.1,0.2), smooth_window=0, smooth_poly=2,
+  require_interior=False)`, `method="direct"` = current at V_ox (recommended for broad DA
+  peaks), `method="chord"` = chord-baseline height (for sharp peaks); `mean_vpeak`,
+  `mean_ibg`, `noise_floor` (also takes `detrend`), `anodic_sweep`.
 - `normalize.d0_normalize(X, names, d0_row, log=False)`, `fit_zscore/apply_zscore`,
   `fit_robust/apply_robust`.
-- `extract.extract_dataset(root, band=(10,1e5), min_norm_snr=3.0, mono_tol=0.10,
-  peak_method="direct", detrend=False, acceptance="monotonic", monotonic_r_min=0.6) ->
-  DataFrame`. Defaults suit real broad-DA-peak data; pass `peak_method="chord",
+- `extract.extract_dataset(root, band, min_norm_snr=3.0, mono_tol=0.10,
+  peak_method="direct", detrend=False, acceptance="monotonic", monotonic_r_min=0.6, ...) ->
+  DataFrame`. `band` has no default and must be given (§1.3 lists the remaining arguments).
+  Defaults suit real broad-DA-peak data; pass `peak_method="chord",
   acceptance="snr"` for the stricter sharp-peak method. Acceptance also accepts
   `"monotonic+snr"` (monotonic channel gate + a lenient per-dose SNR cut).
 - `extract.extract_invivo(root, band=(10,1e5), peak_method="direct", …) -> DataFrame` in-vivo featureset from a raw dir (`paired`/`baseline`/`live`); one row per time
@@ -382,8 +391,11 @@ shared `AnalysisConfig` value, §1.1 is the one a configured run actually gets.
 #### `electropycal.discovery`
 - `config.Condition`, `Profile`, `RunData.from_frame(df)`, `FAST`, `baseline_queue()`.
 - `scheduler.run_discovery(data, conditions=None, out_root="outputs",
-  profile=None, seed=0, gate=None, batch_gate=None)`; `pin_blas_single_threaded()`.
-- `runner.run_condition(condition, data, out_dir, profile, seed=0)`.
+  profile=None, seed=0, gate=None, batch_gate=None, progress=False,
+  cap_min_train_times=True, provenance_root=None, target=None)`;
+  `auto_flag_conditions(ranking, remaining)`; `pin_blas_single_threaded()`.
+- `runner.run_condition(condition, data, out_dir, profile, seed=0, progress=False,
+  cap_min_train_times=True)`.
 - `folds.fold_names(cond_dir)`, `fold_records(cond_dir) -> {fold: {"manifest",
   "hyperparams", "metrics"}}`, `load_fold_bundle(cond_dir, fold) -> (arrays, manifest)`: the
   per-fold models a condition writes to `fold_models.npz` + `folds.json`. Both read the
@@ -399,11 +411,12 @@ shared `AnalysisConfig` value, §1.1 is the one a configured run actually gets.
 
 #### `electropycal.deployment`
 - `deploy.freeze_model(X, y, feature_names, architecture, k, out_dir,
-  feature_index=None, sample_weight=None, scaler="robust", d0_kinds=None)`;
-  `freeze_top(run_dir, data, condition=None, stability_min=0.5, out_dir=…)`, freeze a
-  discovery-selected model on 100% of in-vitro data;
+  feature_index=None, sample_weight=None, scaler="robust", d0_kinds=None, provenance=None)`;
+  `freeze_top(run_dir, data, condition=None, stability_min=0.5,
+  out_dir="outputs/frozen_model", scaler="robust")`, freeze a discovery-selected model on
+  100% of in-vitro data;
   `load_frozen_model`, `recalibrate(model, X_invivo, with_domain=True)`,
-  `recalibrate_invivo(model, invivo_root, flag_distance=None)`.
+  `recalibrate_invivo(model, invivo_root, flag_distance=None, out=None)`.
 - `domain.coral_distance / coral_transform / drift_path`.
 
 #### `electropycal.viz`
@@ -411,8 +424,9 @@ shared `AnalysisConfig` value, §1.1 is the one a configured run actually gets.
   thin de-spined axes, frameless legends, Okabe-Ito CVD-safe cycle). `ensure_style()`
   applies it once per process and every plotting entry point calls it.
   `categorical(n)`, n colors in fixed order; `SEQUENTIAL` = `"viridis"`.
-- `emit(name, fig=None, *, formats=None, provenance=None, stage=None, params=None,
-  footer=None)`, save a figure as PNG and PDF, close it, and display it where that works.
+- `emit(name, fig=None, *, formats=None, close=True, provenance=None, stage=None,
+  params=None, footer=None)`, save a figure as PNG and PDF, close it, and display it where
+  that works.
   `provenance` is slugified into the filename; `provenance`, `stage` and `params` go to the
   output folder's `FIGURES_LOG.txt` (append-only) and `FIGURES.txt` (what is on disk now),
   not into the image unless `footer=True`. `configure_output(out_dir, formats, show,
@@ -433,4 +447,4 @@ shared `AnalysisConfig` value, §1.1 is the one a configured run actually gets.
 `deployment_domain_shift`
 
 Each runs standalone against the shipped `demo/` tree, and synthesizes an equivalent where no
-tree is reachable. See `docs/USAGE.md` §9 for what each one is for.
+tree is reachable. See `docs/USAGE.md` §8 for what each one is for.

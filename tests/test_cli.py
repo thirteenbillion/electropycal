@@ -76,3 +76,17 @@ def test_discover_seeds_flag_reaches_the_stochastic_selector(tmp_path, capsys):
     import json
     run_dir = next((tmp_path / "out").glob("model_discovery_*"))
     assert json.loads((run_dir / "run_config.json").read_text())["profile"]["seeds"] == [0, 1, 2]
+
+
+@pytest.mark.parametrize("sub", ["", "extract", "discover", "freeze", "deploy", "features"])
+def test_help_survives_a_narrow_console_encoding(sub):
+    """Piped or redirected output on Windows uses the ANSI codepage. A help string with a
+    character it cannot encode made `discover --help` die with UnicodeEncodeError."""
+    import os
+    import subprocess
+    import sys
+    args = [sys.executable, "-m", "electropycal"] + ([sub] if sub else []) + ["--help"]
+    r = subprocess.run(args, capture_output=True, check=False,
+                       env={**os.environ, "PYTHONIOENCODING": "cp1252"})
+    assert r.returncode == 0, r.stderr.decode("utf-8", "replace")[-500:]
+    assert b"usage: electropycal" in r.stdout

@@ -100,7 +100,7 @@ def plot_normipeak_per_device(sel: pd.DataFrame, ymax: float | None = None, show
     viz.ensure_style()
     import matplotlib.pyplot as plt
     if "device" not in sel.columns:
-        print("per-device overview skipped (no 'device' column — synthetic data)."); return
+        print("per-device overview skipped (no 'device' column; synthetic data)."); return
     ov = _with_sensor(sel)
     if not len(ov):
         return
@@ -148,5 +148,5 @@ def conditions_table(queue) -> pd.DataFrame:
         parts = name.split("_"); return parts[1] if len(parts) > 1 else "?"
     return pd.DataFrame([
         {"batch": label.get(c.batch, str(c.batch)), "task": task(c.name), "architecture": c.architecture,
-         "k_LVs": list(c.k_grid), "selector": c.selector or "—", "evaluation": c.track}
+         "k_LVs": list(c.k_grid), "selector": c.selector or "none", "evaluation": c.track}
         for c in queue]).sort_values(["batch", "task"]).reset_index(drop=True)

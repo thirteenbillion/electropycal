@@ -1,10 +1,12 @@
 [build-system]
-requires = ["hatchling"]
+# Pinned exactly: the wheel records the backend version that built it, so an unpinned backend
+# would make a rebuild from this tree differ from the published files after its next release.
+requires = ["hatchling==1.32.4"]
 build-backend = "hatchling.build"
 
 [project]
 name = "electropycal"
-version = "0.11.0"
+version = "0.11.1"
 description = "Data processing and recalibration for electrochemical sensors (EIS/FSCV)."
 readme = "README.md"
 # Bounded at BOTH ends, for the same reason the dependencies are (see below).

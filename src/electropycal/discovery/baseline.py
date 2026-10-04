@@ -1,7 +1,7 @@
 """Minimal end-to-end pipeline slice: one Track-2 linear-PLSR condition.
 
-This runs the implemented pieces together — forward-chained folds → in-loop
-Z-scoring (train-only, frozen) → PLSR fit → pooled metrics — so the pipeline and
+This runs the implemented pieces together (forward-chained folds → in-loop
+Z-scoring (train-only, frozen) → PLSR fit → pooled metrics), so the pipeline and
 notebooks work before the full ``discovery.scheduler`` (CARS, nested selection,
 joblib) lands. It is the "Baselines 1.1" condition of the task queue.
 """

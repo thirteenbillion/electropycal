@@ -10,7 +10,7 @@ actually are.
 ## 1. Goal, in one paragraph
 
 Electrochemical sensors (here FSCV for dopamine, characterized by EIS) drift as
-their sensor–tissue interface evolves in vivo. We want to *recalibrate* the FSCV
+their sensor-tissue interface evolves in vivo. We want to *recalibrate* the FSCV
 response using EIS as a proxy for the interface state, via an interpretable PLSR
 model discovered in vitro and deployed in vivo. The library provides (a) a
 **discovery** pipeline that searches model architectures / feature selectors / CV
@@ -27,7 +27,7 @@ electrochemical sensor data processing broadly, not only this case study.
 4. `y_EIS ~ f(s(t))` is the same transfer function in vitro as in vivo (the
    domain-transfer problem, outstanding, validated only in vivo).
 5. **(statistical)** Predictors `X` and response `Y` are measured without
-   appreciable error, bounded, not assumed, via a one-time measurement-
+   appreciable error: bounded, not assumed, via a one-time measurement-
    reliability diagnostic.
 
 ### Prior art: background-current calibration (Roberts & Sombers, 2013)
@@ -41,8 +41,8 @@ non-faradaic **background charging current** (`i_bg ≈ C_dl·dV/dt`). One physi
 observables:
 
 ```
-active surface sites ─┬─▶ DA adsorption capacity ─▶ faradaic sensitivity (peak current per [DA])
-                      └─▶ double-layer capacitance ─▶ background charging current
+active surface sites ─┬─> DA adsorption capacity ─> faradaic sensitivity (peak current per [DA])
+                      └─> double-layer capacitance ─> background charging current
 ```
 
 Roberts et al. used the **cumulative (integrated) background current**, a robust proxy for total
@@ -63,14 +63,18 @@ target (not per-dose `NormIpeak`) is the deployable one.
 
 ## 3. Data schema
 
-- **Observation unit:** one `(channel, timepoint, concentration)` row. Example
-  in-vitro dataset: 8 unbroken/16 channels, 4 timepoints (D0, D1, D7, D20), 5
-  concentrations (100/250/500/1000/5000 nM) → **89 valid rows** of 160 possible.
-- **X: 157 features** = 2 FSCV (`mean_Vpeak`, `mean_Ibg`) + 143 frequency-
-  dependent EIS (7 types × 20–21 log freqs, 10 Hz–100 kHz: `R_s`, `R_p`, `C_s`,
-  `C_p`, `ideality_C`, `tau`, `local_n`) + 12 global EIS (`R_s_integral`,
-  `R_p_integral`, `C_s_integral`, `C_p_integral`, `f_ideality_crossover`,
-  `ideality_C_band`×3, `tau_ratio`, `n_band`×3).
+- **Observation unit:** one `(channel, timepoint, concentration)` row. The synthetic
+  example from `data.synthetic.make_dataset()`: 7 channels, 4 timepoints (D0, D1, D7, D20),
+  5 concentrations (100/250/500/1000/5000 nM) → **103 valid rows** of 140 possible.
+- **X, as `extract_dataset` emits it** = 5 FSCV background predictors (`mean_Vpeak`,
+  `mean_Ibg`, `bg_charge`, `bg_cap`, `bg_switch`) + 7 frequency-dependent EIS types (`R_s`,
+  `R_p`, `C_s`, `C_p`, `ideality_C`, `tau`, `local_n`) on the in-band reference grid + 14
+  global EIS scalars (`R_s_integral`, `R_p_integral`, `C_s_integral`, `C_p_integral`,
+  `f_ideality_crossover`, `ideality_C_band`×3, `n_band`×3, `tau_ratio`, `min_neg_phase`,
+  `inductive_onset_hz`). Under the default (2, 2000) Hz band the grid has 18 points and the
+  two HF sub-band features are all-NaN and dropped, leaving **143 modeling features**. The
+  synthetic example above has 157 (2 FSCV + 7 types × 20-21 frequencies from 10 Hz to
+  100 kHz + 12 global).
 - **Y: `NormIpeak`** = `peak_height(V_ox) / I_bgd(V_ox)` (background-subtracted,
   background-normalized FSCV oxidation peak).
 - **EIS sign convention:** this library works in `Z = Z' + j·Im(Z)` with `Im(Z) < 0` for a
@@ -82,7 +86,7 @@ target (not per-dose `NormIpeak`) is the deployable one.
 | Pipeline stage | Module |
 |---|---|
 | Raw arrays, metadata, asset bundles (npy/parquet/json/npz) | `data.io` |
-| EIS/FSCV quality checks A–D | `data.quality` |
+| EIS quality checks A to C (FSCV check D, the noise floor, is in `features.fscv`) | `data.quality` |
 | Dataclasses / schema | `data.schema` |
 | FSCV features + `NormIpeak` | `features.fscv` |
 | EIS features | `features.eis` |
@@ -91,7 +95,7 @@ target (not per-dose `NormIpeak`) is the deployable one.
 | `PLSRegression` wrapper (`scale=False`) + VIP | `models.plsr` |
 | log/weighted/orthogonal/nonlinear/kernel variants | `models.variants` |
 | Model asset (de)serialization (npz + manifest, no pickle) | `models.base` |
-| mRMR, permutation p-values, t_max | `selection.univariate` |
+| Mutual-information filter (mRMR and permutation `t_max` are documented, not implemented) | `selection.univariate` |
 | VIP / sMC / SR | `selection.pseudo_multivariate` |
 | CARS (seeded, time-box, multi-seed stability) | `selection.cars` |
 | VCA/ICC pre-filter | `selection.icc` |
@@ -124,10 +128,11 @@ selection (incl. CARS's own K-fold). Never tune on the outer test fold.
 
 `baseline_queue()` is a **designed experiment, not a grid**: each batch changes exactly **one** factor
 from a common baseline (`baselines_1.2` = linear PLSR, global, no selector), so every result is a clean
-one-factor contrast. That discipline is forced by the regime. P ≫ N (~157 features, ~89 rows) and
-interpretability *is* the deliverable, so a few well-motivated models beat a large blind sweep. All use
-`k_grid=(2,3)` (few latent variables, more would overfit tiny N). The four batches answer the four
-scientific questions the study poses:
+one-factor contrast. That discipline is forced by the regime. P ≫ N (~150 features against ~100 rows
+in a small study) and interpretability *is* the deliverable, so a few well-motivated models beat a
+large blind sweep. All but `baselines_1.1` (which fixes `k=2`) use `k_grid=(2,3)`: few latent
+variables, since more would overfit tiny N. The four batches answer the four scientific questions
+the study poses:
 
 - **B1.** Is one shared model enough, or does each sensor need its own?
 - **B2.** Does feature selection help, given far more features than rows?
@@ -148,8 +153,8 @@ scientific questions the study poses:
   span the ways a PLS model can rank a feature: `sr` by how much of the feature the target-projected
   loading explains, `vip` by the feature's weighted share of explained Y variance, `smc` by whether
   the feature's association with the normalized regression vector is significant at all. They are
-  measurably distinct on real data, and the section on them in §10 explains why that took a
-  correction to achieve. `threshold_grid=(0.5,1.0)` sweeps the cutoff for the two ratio-valued
+  measurably distinct on real data; §10 explains what keeps them distinct.
+  `threshold_grid=(0.5,1.0)` sweeps the cutoff for the two ratio-valued
   filters; sMC is scored as `-log10(p)` and uses `(2.0,6.0)`, which is the same pair of significance
   levels at any fold size.
 - **Batch 4: transfer → B3 "generalize to new channels".** `newchannels_4.1` is the `universal` (LOCO)
@@ -158,19 +163,21 @@ scientific questions the study poses:
 
 Every tool tracks a data property: collinear spectra + P ≫ N → the PLSR family (not OLS/ridge);
 heteroscedastic → weighted PLSR; multiplicative → log; nonlinear → poly; structured nuisance → O-PLS;
-P ≫ N → SR/VIP/sMC/CARS; new sensors → universal + selection. Kernel / multi-block / multi-level PLSR and
-mRMR / permutation selectors are registered extension points that **raise on use**, they trade away the
-interpretability that is the goal, and ~89 rows cannot support them. Because the queue is factorial-ish
-around one baseline, a single run answers B1 to B4 at once, read off
+P ≫ N → SR/VIP/sMC/CARS; new sensors → universal + selection. Kernel / multi-block / multi-level PLSR are
+registered extension points that **raise on use**, and mRMR / permutation selectors are documented but
+not implemented: they trade away the interpretability that is the goal, and ~100 rows cannot support
+them. Because the queue is factorial-ish around one baseline, a single run answers B1 to B4 at once, read off
 `condition_ranking.parquet`.
 
 ## 6. Execution model
 
 - Conditions: **sequential**, decision-gated task queue (cheap→expensive).
 - Folds: **parallel** via joblib/loky, one single-threaded worker per outer fold.
-- Inner loop + CARS generations + BLAS: **serial** within a worker; BLAS pinned
-  to 1 thread (`OMP/OPENBLAS/MKL_NUM_THREADS=1` set before NumPy import) to avoid
-  oversubscription. Reclaim idle cores via independent conditions-in-a-tier or
+- Inner loop + CARS generations + BLAS: **serial** within a worker; each joblib worker is
+  capped to one BLAS/OpenMP thread (`inner_max_num_threads=1`) to avoid oversubscription,
+  with no environment setup needed. `discovery.scheduler.pin_blas_single_threaded()` also
+  sets `OMP/OPENBLAS/MKL_NUM_THREADS=1` for the parent process, if called before NumPy is
+  imported. Reclaim idle cores via independent conditions-in-a-tier or
   multi-seed CARS chains in parallel.
 - **CARS runtime/stall handling:** bounded by the `n_generations` cap **and** the
   `timebox_patience` valve (stop when the internal RMSEP stops improving) in
@@ -181,11 +188,12 @@ around one baseline, a single run answers B1 to B4 at once, read off
 
 ## 7. Output layout
 
-`outputs/model_discovery_<ts>/` → `run_config.json`, `logs/`, `data/` (shared
-preprocessing, parquet/npy), `conditions/<name>/fold_models.npz` (every fold's arrays, keyed
-`<ch>_<t_test>__<array>`) + `folds.json` (each fold's manifest, hyperparameters and metrics),
-`conditions/<name>/aggregated_metrics.json` + `feature_stability.parquet` + `predictions.parquet`,
-top-level `summary.parquet`, `report/` (rankings + `discovery_summary.md`).
+`outputs/model_discovery_<ts>/` → `run_config.json`, `logs/run.log`,
+`conditions/<name>/fold_models.npz` (every fold's arrays, keyed `<fold>__<array>`, e.g.
+`ch3_t28__coef`) + `folds.json` (each fold's manifest, hyperparameters and metrics),
+`conditions/<name>/condition_config.json` + `aggregated_metrics.json` +
+`feature_stability.parquet` + `predictions.parquet`, top-level `summary.parquet`, `report/`
+(rankings + `discovery_summary.md`).
 
 ## 8. File formats
 
@@ -238,17 +246,17 @@ broad-onset signal on channels whose faradaic response starts below the baseline
 is off by default. The switching-potential capacitive spike near 1.0 to 1.3 V is excluded by
 restricting to the anodic sweep and the dopamine window.
 
-**Selectivity ratio, VIP and sMC are three distinct filters, and keeping them distinct took
+**Selectivity ratio, VIP and sMC are three distinct filters, and keeping them distinct takes
 care.** All three are built on target projection, so it is easy to write two of them that
-collapse onto one. `smc_scores` did: it regressed each feature on the target-projected score
-*with an intercept*, which recovers the loading and so recomputes the selectivity ratio,
-matching it to floating point (maximum relative difference 8e-15, rank correlation 1.000000)
-across random data, wide P > N, and every latent-variable count.
+collapse onto one. Regressing each feature on the target-projected score *with an intercept*
+recovers the loading and so recomputes the selectivity ratio: an sMC written that way matches
+it to floating point (maximum relative difference 8e-15, rank correlation 1.000000) across
+random data, wide P > N, and every latent-variable count.
 
 The distinguishing vector is which one carries the decomposition. Selectivity ratio explains
 each feature with the loading obtained by projecting the data onto the target-projected score.
 sMC uses the **normalized regression vector** `b/||b||` directly, which is what makes it
-sharper and noisier, since it mixes predictive with orthogonal variation. `smc_scores` now
+sharper and noisier, since it mixes predictive with orthogonal variation. `smc_scores`
 forms the explained part as `outer(Xc @ b_hat, b_hat)` and returns the reference F statistic
 with (1, n - 2) degrees of freedom. Rank correlation against the selectivity ratio on real
 data is 0.39 at two components and 0.16 at three.
@@ -284,11 +292,11 @@ so the discrepancy is a documentation trap rather than a behavioural difference.
 
 **Deliberate simplifications, chosen rather than missing.** The ICC pre-filter uses the
 SS-ANOVA variance split rather than a heavier VCA mixed-effects estimator. Weighted PLSR is
-the square-root-weight WLS approximation. Kernel, multi-block and multi-level PLSR, and the
-mRMR and permutation-`t_max` selectors, are registered extension points that raise on use:
-they trade away the interpretability that is the point here, and the row counts involved
-cannot support them. Promotion of the best model between batches is a manual review
-checkpoint by design, supported by the checkpointed discovery notebook.
+the square-root-weight WLS approximation. Kernel, multi-block and multi-level PLSR are
+registered extension points that raise on use, and the mRMR and permutation-`t_max` selectors
+are documented extension points, not implemented: they trade away the interpretability that is
+the point here, and the row counts involved cannot support them. Promotion of the best model
+between batches is a manual review checkpoint by design, supported by the checkpointed discovery notebook.
 
 ## 11. What the tests cover
 

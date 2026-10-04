@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-# Frequency-dependent EIS feature types (evaluated per log frequency, 10 Hz–100 kHz).
+# Frequency-dependent EIS feature types (evaluated per log frequency, 10 Hz to 100 kHz).
 EIS_FREQ_FEATURE_TYPES: tuple[str, ...] = (
     "R_s", "R_p", "C_s", "C_p", "ideality_C", "tau", "local_n",
 )
@@ -40,7 +40,7 @@ ADDITIVE_D0_TYPES: frozenset[str] = frozenset(
 # min_neg_phase is a PHASE (degrees) that can sit near zero and goes negative when the interface
 # turns inductive, so it must be additive: a multiplicative ratio to a near-zero / sign-changing
 # baseline is unstable and meaningless. (inductive_onset_hz, by contrast, is a positive,
-# log-distributed FREQUENCY and stays multiplicative like tau — its ratio to the baseline onset is
+# log-distributed FREQUENCY and stays multiplicative like tau; its ratio to the baseline onset is
 # an interpretable, log-transformable drift signal.)
 #
 # Everything else (magnitude/area-scaling: mean_Ibg, Bode R/C, tau, tau_ratio, inductive_onset_hz)
@@ -64,8 +64,8 @@ class Observation:
 class FeatureSet:
     """Extracted featureset: X (N × P), Y (N,), aligned metadata, feature names."""
 
-    X: "object"                # np.ndarray (N, P) — kept as object to avoid import at schema level
-    y: "object"                # np.ndarray (N,)   — NormIpeak
+    X: "object"                # np.ndarray (N, P), kept as object to avoid import at schema level
+    y: "object"                # np.ndarray (N,):   NormIpeak
     feature_names: list[str]
     observations: list[Observation]
 
@@ -97,7 +97,7 @@ def is_log_transformable(feature_name: str) -> bool:
 
 #: Columns that are **never predictors**. Two kinds live here, and both must stay out of any feature
 #: matrix: the *identifiers / QC bookkeeping* that describe a row rather than the electrode, and the
-#: **RESERVED targets** — everything derived from the dopamine faradaic response. Using any of the
+#: **RESERVED targets**: everything derived from the dopamine faradaic response. Using any of the
 #: latter as an input would leak the quantity the model is supposed to predict from leakage-safe
 #: electrode state (EIS + the 0 nM background), which is the core methodological guarantee of this
 #: library. Note ``mean_Vpeak`` is deliberately *absent*: a peak *position* describes the electrode,
@@ -109,7 +109,7 @@ RESERVED_COLUMNS = ("device", "channel", "sensor_id", "timepoint", "concentratio
                     "NormIpeak", "noise_floor", "snr", "rms_snr", "repeatability_snr",
                     "rep_std", "peak_at_edge", "peak_area_clipped", "dose_response_r",
                     # faradaic peak-SHAPE (deformation-mode characterization / candidate targets;
-                    # NOT predictors — derived from the DA signal, would leak the NormIpeak numerator):
+                    # NOT predictors: derived from the DA signal, would leak the NormIpeak numerator):
                     "peak_height", "peak_area", "peak_fwhm",
                     # sensitivity-target framing (features.targets.sensitivity_featureset):
                     "sensitivity", "sensitivity_intercept", "sensitivity_curvature", "n_conc",

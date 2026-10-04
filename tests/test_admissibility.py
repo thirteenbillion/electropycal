@@ -1,4 +1,4 @@
-"""Target-admissibility screen (study experiment A2)."""
+"""Target-admissibility screen."""
 
 import numpy as np
 import pandas as pd

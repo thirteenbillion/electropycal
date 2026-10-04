@@ -64,7 +64,7 @@ class BatchRunner:
                              ci_lo=agg.get("rmsep_ci_lo", nan), ci_hi=agg.get("rmsep_ci_hi", nan),
                              q2=agg.get("pooled_q2", nan), folds=agg.get("n_folds", 0)))
             el = time.time() - t0; eta = el / i * (len(conds) - i)
-            print(f"  [batch {batch_num}] {i}/{len(conds)} conditions done — {el:.0f}s elapsed, ETA {eta:.0f}s")
+            print(f"  [batch {batch_num}] {i}/{len(conds)} conditions done, {el:.0f}s elapsed, ETA {eta:.0f}s")
         return pd.DataFrame(rows).sort_values("rmsep", na_position="last").reset_index(drop=True)
 
     def advise(self, next_batch: int) -> dict:

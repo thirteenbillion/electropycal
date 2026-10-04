@@ -1,4 +1,4 @@
-"""FSCV stabilization convergence check — optional.
+"""FSCV stabilization convergence check (optional).
 
 The interface is "stabilized" when the background FSCV cycle stops changing
 cycle-to-cycle. This module provides an objective plateau criterion for that, as
@@ -10,7 +10,7 @@ an alternative to manual review. It works two ways:
 - **offline:** if a subset of raw background cycles was saved, compute the drift
   series first with :func:`cycle_drift`.
 
-Not wired into the mandatory pipeline — stabilization is judged during measurement.
+Not wired into the mandatory pipeline: stabilization is judged during measurement.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ def stabilization_traces(export, v_target: float = 0.7, cycles_per_round: int = 
     labels); otherwise it falls back to ``rep // cycles_per_round``.
 
     **Cycle order is temporal:** cycles are sorted by ``(round, numeric scan)`` when
-    scans are present — real PSTrace exports lay the columns out in *lexicographic*
+    scans are present; real PSTrace exports lay the columns out in *lexicographic*
     scan order (1, 10, 11, …, 19, 2, 20, 3, …), which is **not** acquisition order, so
     ordering by column appearance would make consecutive cycles non-adjacent in time
     and spuriously inflate the cycle-to-cycle drift. Without scans it falls back to
@@ -51,7 +51,7 @@ def stabilization_traces(export, v_target: float = 0.7, cycles_per_round: int = 
     Returns a DataFrame with columns ``channel``, ``cycle`` (0-based per channel),
     ``round`` (0-based), ``cycle_in_round``, ``scan`` (PSTrace scan id or NaN), and
     ``i_target``. Also carries the full-cycle ``_voltage`` / ``_current`` arrays so the
-    notebook can plot the raw I–V loop and compute a cycle-to-cycle drift metric.
+    notebook can plot the raw I-V loop and compute a cycle-to-cycle drift metric.
     """
     import pandas as pd
     recs = []
@@ -83,7 +83,7 @@ def cycle_drift(cycles: np.ndarray, voltage: np.ndarray | None = None,
     ``(n_cycles, n_samples)``. Returns length ``n_cycles − 1``.
 
     ``region="anodic"`` (default) restricts the comparison to the rising (anodic)
-    sweep — the faradaic half, excluding the switching-potential spike — when
+    sweep (the faradaic half, excluding the switching-potential spike) when
     ``voltage`` (the shared 1-D sweep grid) is given; ``region="full"`` (or no
     ``voltage``) uses the whole cycle.
     """
@@ -138,7 +138,7 @@ def round_average_cycles(traces_ch, drop_coldstart: bool = True):
     Returns ``(rounds, avg_current, voltage)``: the sorted round ids, an
     ``(n_rounds, n_samples)`` array of per-round mean current, and the shared voltage grid.
     With ``drop_coldstart`` (default), the first cycle of each round
-    (``cycle_in_round == 0``) — a cold-start transient that sits off the settled value —
+    (``cycle_in_round == 0``), a cold-start transient that sits off the settled value,
     is excluded from its round mean.
     """
     t = traces_ch
@@ -157,7 +157,7 @@ def round_drift_series(traces_ch, region: str = "anodic",
     """Round-to-round normalized drift for one channel: average each round's cycles
     (:func:`round_average_cycles`), then :func:`cycle_drift` across the round means.
 
-    This is the robust convergence signal for many-round stabilization runs — within-round
+    This is the robust convergence signal for many-round stabilization runs: within-round
     noise, the per-round cold-start, and occasional glitch cycles are averaged out, so the
     series tracks the genuine round-over-round settling of the electrode rather than
     per-cycle jitter. Length ``n_rounds - 1`` (empty if fewer than two rounds).
@@ -208,7 +208,7 @@ def check_converged(drift: np.ndarray, tol: float = 0.01, patience: int = 10,
 
 def estimate_settle_tau(drift: np.ndarray) -> float:
     """Time constant (in cycles) of an exponential fit ``A·e^{-t/τ}+c`` to the
-    drift envelope — a summary of how fast the interface settles. NaN if the fit
+    drift envelope, a summary of how fast the interface settles. NaN if the fit
     fails or the series is too short."""
     d = np.asarray(drift, float)
     d = d[np.isfinite(d)]

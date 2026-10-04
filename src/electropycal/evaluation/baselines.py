@@ -2,16 +2,16 @@
 
 Two reference points make a Q² legible:
 
-- **naïve mean** — predict every held-out sensor-timepoint's target with the *training-set mean*. This is
+- **naïve mean**: predict every held-out sensor-timepoint's target with the *training-set mean*. This is
   the SST denominator of Q² itself; its RMSEP is the "do-nothing" error. A small model-RMSEP is only
-  impressive **relative to this** — if the target barely moves, the naïve RMSEP is already tiny and a low
+  impressive **relative to this**: if the target barely moves, the naïve RMSEP is already tiny and a low
   model-RMSEP means nothing (Q²≈0).
-- **time-only** — predict the target from the sensor's **age alone** (`time_since_baseline`, days since its
+- **time-only**: predict the target from the sensor's **age alone** (`time_since_baseline`, days since its
   first timepoint), forward-chained, no EIS/FSCV features. Comparing the full electrode-state model to this
-  answers the E2 question directly: *does the impedance probe add anything over simply knowing how old the
+  answers one question directly: *does the impedance probe add anything over simply knowing how old the
   channel is?* If full ≈ time-only, EIS is not carrying orthogonal drift information.
 
-- **channel persistence** — predict a channel's next value (or degraded/not) from **its own earlier
+- **channel persistence**: predict a channel's next value (or degraded/not) from **its own earlier
   timepoints**, with *no electrode-state features at all*. This is the sharpest of the three and the one
   that settled the project's central question: on the real data it **beats** every state-based model
   (regression q² 0.34 vs the hierarchical model's best 0.22; classification AUC 0.70/0.76/0.81 vs the
@@ -105,18 +105,18 @@ def channel_persistence_cv(sens_df: pd.DataFrame, target: str = "sensitivity",
 
     Three controls, all forward-chained on the same folds the state-based evaluators use:
 
-    - ``chan_mean`` — predict the shrunk mean of that channel's own earlier values (regression, ``q2``).
-    - ``chan_trend`` — additionally extrapolate its own age-slope (regression, ``q2``). Compare to
+    - ``chan_mean``: predict the shrunk mean of that channel's own earlier values (regression, ``q2``).
+    - ``chan_trend``: additionally extrapolate its own age-slope (regression, ``q2``). Compare to
       ``chan_mean`` to test whether *dynamics* add anything: if it is worse, momentum carries no signal
       and a state-space/Kalman model is not warranted.
-    - ``persistence_frac{f}`` — score a channel by the fraction of its own earlier timepoints already
+    - ``persistence_frac{f}``: score a channel by the fraction of its own earlier timepoints already
       labelled degraded at threshold ``f`` (classification, ``roc_auc``); the control for
       :func:`~electropycal.evaluation.classify.drift_classifier_cv`.
 
     Returns one row per control with ``control``, ``kind``, ``metric``, ``value``, ``rmsep``, ``n_test``.
 
     These are **the bar**, not a curiosity. A drift monitor that only matches ``persistence`` is not
-    reading the electrode — it is reading "this channel was already bad", which in vivo you cannot
+    reading the electrode; it is reading "this channel was already bad", which in vivo you cannot
     measure anyway (it needs dopamine standards). Shrinkage (``k_intercept`` / ``k_slope``) matches
     :func:`~electropycal.evaluation.hierarchical.hierarchical_cv` so the comparison is like-for-like.
     """

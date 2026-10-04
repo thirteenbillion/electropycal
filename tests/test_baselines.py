@@ -45,7 +45,7 @@ def test_time_only_empty_or_missing_target_is_graceful():
 
 
 def test_fit_ridge_auto_alpha_shrinks_to_the_mean_on_a_signal_free_target():
-    """The E6/E8 regime: p >> n and the predictors carry nothing about the target.
+    """The p >> n regime, where the predictors carry nothing about the target.
 
     A fixed small penalty fits the noise and scores clearly negative out of sample; the inner-CV
     penalty shrinks toward the training mean and lands at Q2 ~ 0. This is the toy version of the real

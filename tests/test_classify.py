@@ -1,4 +1,4 @@
-"""Drift-beyond-trust classifier (study experiment E5): binary usable/degraded from electrode state."""
+"""Drift-beyond-trust classifier: binary usable/degraded from electrode state."""
 
 import numpy as np
 import pandas as pd

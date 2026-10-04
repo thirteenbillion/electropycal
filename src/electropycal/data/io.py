@@ -1,4 +1,4 @@
-"""Serialization helpers (DESIGN §8): npy/npz, Parquet, JSON — no pickle.
+"""Serialization helpers (DESIGN §8): npy/npz, Parquet, JSON (no pickle).
 
 JSON writing casts NumPy scalars/arrays to native Python so metrics/config are
 portable. Parquet is used for feature/metric tables (dtype- and precision-safe).

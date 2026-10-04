@@ -238,7 +238,7 @@ def test_acceptance_none_keeps_all_finite_rows(tmp_path):
 
 
 def _write_fscv_below_bg(path, ch, offset, reps=2):
-    """An FSCV file whose current sits a constant ``offset`` BELOW the (100+50v) background —
+    """An FSCV file whose current sits a constant ``offset`` BELOW the (100+50v) background,
     so (signal - background) is negative across the whole window and NormIpeak(direct) < 0."""
     v = np.linspace(-0.4, 1.1, 80)
     cur = (100.0 + 50.0 * v) - offset

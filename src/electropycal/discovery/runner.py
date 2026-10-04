@@ -201,13 +201,13 @@ def run_condition(condition: Condition, data: RunData, out_dir: str | Path,
 
     ``progress=True`` emits timestamped ``[HH:MM:SS]`` lines: a START line (fold count,
     track, grids), one line per outer fold with a running elapsed/ETA estimate (serial
-    ``n_jobs=1`` only — parallel folds finish out of order, so just START/DONE are logged),
+    ``n_jobs=1`` only; parallel folds finish out of order, so just START/DONE are logged),
     and a DONE line with the pooled RMSEP and wall time. Use it to track a long full-profile
     run and estimate remaining time.
 
     ``cap_min_train_times`` (**default True**) caps ``profile.min_train_times`` to what the
     data's timepoint count can support (:func:`~electropycal.discovery.config.effective_min_train_times`),
-    warning when it fires — so a short series does not silently yield 0 folds / nan. Set
+    warning when it fires, so a short series does not silently yield 0 folds / nan. Set
     ``False`` to run with the profile's value verbatim.
     """
     out_dir = Path(out_dir)
@@ -247,7 +247,7 @@ def run_condition(condition: Condition, data: RunData, out_dir: str | Path,
                              min_train_times=mtt, seed=seed))
     t0 = time.time()
     # Multi-seed only matters for the STOCHASTIC selectors (CARS / MI use random_state); every other
-    # architecture+selector is deterministic, so repeating it under new seeds is pure waste — collapse
+    # architecture+selector is deterministic, so repeating it under new seeds is pure waste; collapse
     # to one seed there. When >1 seed is set for a stochastic selector, repeat the whole nested-CV per
     # seed and average the aggregates + selection frequencies (seed[0]'s per-fold bundles are the ones
     # written to disk). Default profile.seeds=(0,) -> single seed -> byte-identical to before.
@@ -255,7 +255,7 @@ def run_condition(condition: Condition, data: RunData, out_dir: str | Path,
     seeds = tuple(dict.fromkeys(profile.seeds)) if (_stochastic and len(set(profile.seeds)) > 1) \
         else (seed,)
     if progress:
-        _log(f"START {condition.name}  ({condition.architecture}, track={condition.track}) — "
+        _log(f"START {condition.name}  ({condition.architecture}, track={condition.track}): "
              f"{len(folds)} folds, k_grid={condition.k_grid}, "
              f"seeds={seeds}{' (selector deterministic -> 1 seed)' if not _stochastic and len(set(profile.seeds)) > 1 else ''}, "
              f"n_boot={profile.n_boot}, n_jobs={profile.n_jobs}")
@@ -344,7 +344,7 @@ def run_condition(condition: Condition, data: RunData, out_dir: str | Path,
     agg["seeds"] = list(seeds)
     freq = np.mean(seed_freqs, axis=0)
     if progress:
-        _log(f"DONE  {condition.name} — pooled_rmsep={agg.get('pooled_rmsep', float('nan')):.4f} "
+        _log(f"DONE  {condition.name}: pooled_rmsep={agg.get('pooled_rmsep', float('nan')):.4f} "
              f"over {len(folds_results)} usable folds"
              f"{f' x {len(seeds)} seeds' if len(seeds) > 1 else ''} in {time.time() - t0:.0f}s")
     write_json(cond_dir / "aggregated_metrics.json", agg)

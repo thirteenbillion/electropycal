@@ -2,10 +2,10 @@
 
 Two offline, leakage-free data characterizations run once on all valid rows:
 
-- ``variance_hierarchy`` — the decomposition of each feature's variance
+- ``variance_hierarchy``: the decomposition of each feature's variance
   into between-channel / within-channel-temporal / within-channel-concentration
   components (structural vs dynamic signal).
-- ``measurement_reliability`` — the diagnostic that *bounds* Assumption
+- ``measurement_reliability``: the diagnostic that *bounds* Assumption
   5: per-feature reliability ``R = σ²_signal / σ²_obs`` from replicate spread,
   the fraction of modeled variance that is real signal rather than measurement
   noise. ``R → 1`` ⇒ the error-free assumption is defensible for that feature.
@@ -61,7 +61,7 @@ def measurement_reliability(
     Parameters
     ----------
     replicate_values : (M,) feature value computed *per replicate* (on the modeled
-        scale — post D0/log), for all replicates of all observations.
+        scale, post D0/log), for all replicates of all observations.
     observation_id : (M,) integer id grouping replicates into observations.
     n_rep : replicates per observation used for the mean (defaults to the mean
         group size); enters the ``σ²_meas/n_rep`` sampling term.
@@ -115,8 +115,8 @@ def drift_reliability(
 
     Combines the Phase-0 ``within_temporal`` component (the drift *signal*, from
     :func:`variance_hierarchy`) with the Phase-0.5 replicate variance ``sigma2_meas`` (the *noise*,
-    from :func:`measurement_reliability`). Unlike the whole-response reliability — whose ``σ²_obs`` is
-    dominated by the dose-response — this targets the drift slice the recalibration model actually
+    from :func:`measurement_reliability`). Unlike the whole-response reliability (whose ``σ²_obs`` is
+    dominated by the dose-response), this targets the drift slice the recalibration model actually
     learns from. For EIS features (dose-invariant) the within-temporal component *is* the drift, so
     this is well-defined; for the response it mixes the dose-averaged level shift (interpret with care).
 
@@ -164,7 +164,7 @@ def drift_alignment(
 
     Returns ``alignment_r`` (pooled correlation, back-transformed), ``abs_alignment`` = ``|r|``, and
     ``n_cells``. A near-zero ``abs_alignment`` across *all* features means no predictor's drift
-    explains the response's drift — recalibration is unlikely to work regardless of architecture.
+    explains the response's drift; recalibration is unlikely to work regardless of architecture.
     """
     if method not in ("pearson", "spearman"):
         raise ValueError(f"method must be 'pearson' or 'spearman', got {method!r}")

@@ -1,4 +1,4 @@
-"""Stratify-by-drift diagnostic (study experiment E8)."""
+"""Stratify-by-drift diagnostic."""
 
 import numpy as np
 import pandas as pd

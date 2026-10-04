@@ -1,6 +1,6 @@
 """Diagnostics review: variance / reliability / drift-alignment analysis as a library API.
 
-Folds ``diagnostics_review`` — the notebook that asks *is recalibration well-posed here?* — into one
+Folds ``diagnostics_review`` (the notebook that asks *is recalibration well-posed here?*) into one
 :class:`DiagnosticsReview` object. Construction takes the **raw** (non-D0) featureset and the shared
 config, and computes the feature-type taxonomy + per-feature variance decomposition once; each ``plot_*``
 method draws one section's figure(s) and returns/stashes the tables later sections (and ``verdict``)
@@ -172,7 +172,7 @@ class DiagnosticsReview:
         if self.REL is not None:
             return self.REL
         if self.root is None:
-            print("replicate reliability needs the raw ROOT (not available) — skipping reliability sections.")
+            print("replicate reliability needs the raw ROOT (not available); skipping reliability sections.")
             return None
         from .features.extract import replicate_feature_reliability
         keep = {(r.device, int(r.channel), float(r.timepoint)) for r in self.FEAT.itertuples()}
@@ -194,7 +194,7 @@ class DiagnosticsReview:
             "customize by rebuilding: DiagnosticsReview(FEAT, cfg=CFG, root=ROOT, band=BAND, n_jobs=4)",
         ]), flush=True)
 
-    # ---- Section 0 — feature dictionary --------------------------------------------------------
+    # ---- Section 0: feature dictionary ---------------------------------------------------------
     def feature_dictionary(self) -> pd.DataFrame:
         from . import catalog_frame
         fd = catalog_frame()
@@ -204,13 +204,13 @@ class DiagnosticsReview:
             for t in (feat_type(c) for c in self.FEAT.columns)}
         return fd.assign(in_this_featureset=[t in present for t in fd.index])
 
-    # ---- Section 1 — variance hierarchy --------------------------------------------------------
+    # ---- Section 1: variance hierarchy ---------------------------------------------------------
     def plot_featuretype_distributions(self, show: bool = True):
         viz.ensure_style()
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots(figsize=(5.4, 3.4), dpi=140)
         h = self._annot_hist(ax, self.FEAT[RESP].to_numpy(float), RESP_COLOR, bins=40, nlabel="n_samples")
-        ru = self.feat_unit(RESP); ax.set_title(f"response — {RESP}")
+        ru = self.feat_unit(RESP); ax.set_title(f"response: {RESP}")
         ax.set_xlabel(f"{RESP} ({ru})" if ru else RESP); ax.set_ylabel("count")
         ax.legend(handles=h, fontsize=8, handlelength=1.4, labelspacing=0.25); plt.tight_layout()
         if show:
@@ -244,7 +244,7 @@ class DiagnosticsReview:
             a.set_xticks(range(len(valid))); a.set_xticklabels([v[0] for v in valid], rotation=45)
             a.set_title(t, fontsize=8); a.set_xlabel("frequency (Hz)", fontsize=6)
             a.set_ylabel(self.feat_unit(t), fontsize=6); a.tick_params(labelsize=6)
-        fig.suptitle("Frequency-dependent featuretype distributions — density per in-band frequency "
+        fig.suptitle("Frequency-dependent featuretype distributions: density per in-band frequency "
                      "(median = red)", y=1.01); plt.tight_layout()
         if show:
             viz.emit("diag_featuretype_distributions_3")
@@ -275,8 +275,8 @@ class DiagnosticsReview:
         ax.set_xticks(xpos); ax.set_xticklabels(list(bars.index), rotation=45, ha="right", fontsize=7)
         ax.get_xticklabels()[0].set_color(RESP_COLOR); ax.get_xticklabels()[0].set_fontweight("bold")
         ax.set_ylim(0, 1); ax.set_ylabel("fraction of variance")
-        ax.set_xlabel("featuretype (ordered by within-time variance) — within-time at base")
-        ax.set_title("Variance breakdown — response + above-median within-time (drift) featuretypes")
+        ax.set_xlabel("featuretype (ordered by within-time variance); within-time at base")
+        ax.set_title("Variance breakdown: response + above-median within-time (drift) featuretypes")
         ax.legend(fontsize=7, ncol=3, loc="upper right"); plt.tight_layout()
         if show:
             viz.emit("diag_variance_breakdown")
@@ -346,18 +346,18 @@ class DiagnosticsReview:
             cmap = mcolors.LinearSegmentedColormap.from_list("grad", [light, hexc])
             p = ax.scatter(x, y, zl, c=c, cmap=cmap, s=22, depthshade=False); fig.colorbar(p, label=feature, shrink=0.6)
             ax.set_xlabel("channel"); ax.set_ylabel("timepoint (days)"); ax.set_zlabel("log10 concentration (nM)")
-            ax.set_title(f"{feature} (static — install plotly for interactive)"); plt.tight_layout()
+            ax.set_title(f"{feature} (static; install plotly for interactive)"); plt.tight_layout()
             if show:
                 viz.emit("diag_feature_3d")
 
-    # ---- Section 2 — reliability ---------------------------------------------------------------
+    # ---- Section 2: reliability ----------------------------------------------------------------
     def plot_response_reliability(self, show: bool = True):
         viz.ensure_style()
         import matplotlib.pyplot as plt
         from matplotlib.lines import Line2D
         n_rep = self.cfg.max_reps or 3
         if "rep_std" not in self.FEAT.columns or not self.FEAT["rep_std"].notna().any():
-            print("no replicate spread (rep_std) in the featureset — cannot bound reliability")
+            print("no replicate spread (rep_std) in the featureset; cannot bound reliability")
             self.R, self.sigma2_meas, self.n_rep = float("nan"), float("nan"), n_rep
             return
         rs = self.FEAT["rep_std"].to_numpy(float)
@@ -372,7 +372,7 @@ class DiagnosticsReview:
         ax[0].barh([0], [sigma2_signal], color="#2CA02C", label=f"signal σ²_signal  (R = {R:.2f})")
         ax[0].barh([0], [noise], left=[sigma2_signal], color="0.6", label="replicate noise  σ²_meas/n_rep")
         ax[0].set_yticks([0]); ax[0].set_yticklabels(["σ²_obs"]); ax[0].set_xlabel("variance")
-        ax[0].set_title("response measurement — signal vs noise"); ax[0].legend(fontsize=6.5, loc="lower right")
+        ax[0].set_title("response measurement: signal vs noise"); ax[0].legend(fontsize=6.5, loc="lower right")
         v = rs[np.isfinite(rs)] ** 2
         h = self._annot_hist(ax[1], v, "#1B9E77", bins=40, nlabel="n_obs")
         ax[1].axvline(sigma2_obs, color="crimson", ls="--", lw=1.4)
@@ -389,7 +389,7 @@ class DiagnosticsReview:
         if self.sigma2_meas is None:
             self.plot_response_reliability(show=False)
         if not np.isfinite(self.sigma2_meas):
-            print("no replicate spread — cannot bound response drift reliability"); return
+            print("no replicate spread; cannot bound response drift reliability"); return
         rd = drift_reliability(self.FEAT[RESP].to_numpy(float), self.FEAT.sensor.to_numpy(),
                                self.FEAT.timepoint.to_numpy(), self.FEAT.concentration.to_numpy(),
                                self.sigma2_meas, self.n_rep)
@@ -478,7 +478,7 @@ class DiagnosticsReview:
         return (DRIFT.groupby("type").agg(n=("R_drift", "size"), median_R_drift=("R_drift", "median"),
                 median_drift_snr=("drift_snr", "median")).sort_values("median_R_drift", ascending=False))
 
-    # ---- Section 3 — drift alignment -----------------------------------------------------------
+    # ---- Section 3: drift alignment ------------------------------------------------------------
     def plot_drift_alignment(self, show: bool = True) -> pd.DataFrame:
         viz.ensure_style()
         import matplotlib.pyplot as plt
@@ -494,7 +494,7 @@ class DiagnosticsReview:
         h = self._annot_hist(ax[0], ALIGN["alignment_r"].to_numpy(float), "#E6A817", bins=40, rng=(-1, 1),
                              nlabel="n_features")
         ax[0].axvline(0, color="0.4", lw=0.8); ax[0].set_xlabel("drift alignment r with response (signed)")
-        ax[0].set_ylabel("# features"); ax[0].set_title("predictor–response drift alignment")
+        ax[0].set_ylabel("# features"); ax[0].set_title("predictor-response drift alignment")
         ax[0].legend(handles=h, fontsize=6.5)
         if self.DRIFT is not None:
             J = self.DRIFT.join(ALIGN[["alignment_r"]], how="inner").dropna(subset=["R_drift", "alignment_r"])
@@ -525,7 +525,7 @@ class DiagnosticsReview:
         viz.ensure_style()
         import matplotlib.pyplot as plt
         if self.root is None:
-            print("frequency-bandwidth tradeoff needs the raw ROOT — skipping."); return
+            print("frequency-bandwidth tradeoff needs the raw ROOT; skipping."); return
         from .data.pstrace import parse_folder, parse_filename, read_pstrace
         from .features.eis import eis_features
         from .features.extract import _avg_eis
@@ -639,7 +639,7 @@ class DiagnosticsReview:
             viz.emit("diag_alignment_sanity_checks")
         return {"max_drift_alignment": da, "max_absolute_alignment": aa}
 
-    # ---- Section 4 — verdict -------------------------------------------------------------------
+    # ---- Section 4: verdict --------------------------------------------------------------------
     def verdict(self) -> None:
         drift = float(self.VAR["within_time"].median()); struct = float(self.VAR["between_sensor"].median())
         ntp = int(self.FEAT.timepoint.nunique())
@@ -650,17 +650,17 @@ class DiagnosticsReview:
         if self.R is not None and np.isfinite(self.R):
             rd = (f"{(self._valid['R_drift']>0.5).mean():.0%}" if self._valid is not None else "n/a")
             print(f"  • Response reliability R = {self.R:.2f} "
-                  f"({'clean' if self.R>=0.8 else 'noisy — RMSEP floor is real' if self.R<0.5 else 'moderate'}); "
+                  f"({'clean' if self.R>=0.8 else 'noisy: RMSEP floor is real' if self.R<0.5 else 'moderate'}); "
                   f"drift resolvable for {rd} of features.")
         if self._maxa is not None:
-            print(f"  • Best predictor–response drift alignment |r| = {self._maxa:.2f} "
-                  f"({'a feature tracks the response drift' if self._maxa>0.5 else 'NOTHING tracks the response drift — recalibration unlikely'}).")
+            print(f"  • Best predictor-response drift alignment |r| = {self._maxa:.2f} "
+                  f"({'a feature tracks the response drift' if self._maxa>0.5 else 'NOTHING tracks the response drift; recalibration unlikely'}).")
         print(f"  • Timepoints: {ntp} distinct. Forward-chained nested CV needs ≥2 -> "
               f"{'OK' if ntp>=2 else 'INSUFFICIENT'}; per-sensor coverage median {int(tps_per_sensor.median())}.")
         print("  • Well-posed IF: drift resolvable above noise (§2), ≥1 feature's drift tracks the response "
               "(§3), and enough timepoints for CV. Else expect a high RMSEP floor regardless of architecture.")
 
-    # ---- Section 5 — D0-normalization effect ---------------------------------------------------
+    # ---- Section 5: D0-normalization effect ----------------------------------------------------
     def plot_d0_effect(self, show: bool = True):
         viz.ensure_style()
         import matplotlib.pyplot as plt
@@ -680,7 +680,7 @@ class DiagnosticsReview:
             ax.text(i - w / 2, a + 0.01, f"{a:.2f}", ha="center", fontsize=6)
             ax.text(i + w / 2, b + 0.01, f"{b:.2f}", ha="center", fontsize=6)
         ax.set_xticks(xr); ax.set_xticklabels(labs); ax.set_ylabel("median variance share"); ax.set_ylim(0, 1)
-        ax.set_title("variance decomposition — raw vs D0-normalized")
+        ax.set_title("variance decomposition: raw vs D0-normalized")
         ax.legend(handles=[Patch(facecolor="0.6", alpha=0.45, label="raw"),
                            Patch(facecolor="0.6", alpha=1.0, label="D0-normalized")], fontsize=7)
         plt.tight_layout()
@@ -694,7 +694,7 @@ class DiagnosticsReview:
             gd = FEAT_D0[FEAT_D0.sensor == s].groupby("timepoint")[topfeat].mean()
             ax[0].plot(gr.index, gr.values, "-o", ms=4, lw=1.3, color=col)
             ax[1].plot(gd.index, gd.values, "-o", ms=4, lw=1.3, color=col)
-        ax[0].set_title(f"'{topfeat}' — raw (per sensor)"); ax[1].set_title(f"'{topfeat}' — D0-normalized")
+        ax[0].set_title(f"'{topfeat}': raw (per sensor)"); ax[1].set_title(f"'{topfeat}': D0-normalized")
         for a in ax:
             a.set_xlabel("timepoint (days)")
         fig.suptitle("top-drift feature: fabrication offset (raw) collapses to a common D0 baseline (right)", y=1.02)
@@ -738,7 +738,7 @@ class DiagnosticsReview:
         dmed = float((ALIGN_D0.loc[common] - self.ALIGN.loc[common, "alignment_r"]).abs().median())
         print(f"median |Δ alignment| raw→D0 = {dmed:.3f}  (≈0 ⇒ D0-norm does not distort the drift↔response signal).")
 
-    # ---- Section 6 — response / deformation modes ---------------------------------------------
+    # ---- Section 6: response / deformation modes ----------------------------------------------
     def plot_response_modes(self, show: bool = True) -> pd.DataFrame:
         viz.ensure_style()
         import matplotlib.pyplot as plt
@@ -781,7 +781,7 @@ class DiagnosticsReview:
                 ax.text(i, 1.03, f"R_drift {r['R_drift']:.2f}", ha="center", va="bottom", fontsize=5.5, rotation=90)
         ax.set_xticks(xp); ax.set_xticklabels(MODES.index, rotation=45, ha="right", fontsize=7)
         ax.set_ylim(0, 1.25); ax.axhline(1.0, color="0.7", lw=0.6)
-        ax.set_ylabel("variance share"); ax.set_title("Response / deformation modes — decomposition + R_drift")
+        ax.set_ylabel("variance share"); ax.set_title("Response / deformation modes: decomposition + R_drift")
         ax.legend(fontsize=7, ncol=3, loc="lower center", bbox_to_anchor=(0.5, 1.10)); plt.tight_layout()
         if show:
             viz.emit("diag_response_modes")

@@ -2,7 +2,7 @@
 
 The property under test is the one that makes analysis over selectively-staged data valid:
 re-extracting a subset with the pin from a full run yields *exactly* those sessions' rows,
-unchanged — and every way that could silently stop being true raises instead.
+unchanged, and every way that could silently stop being true raises instead.
 """
 
 import pandas as pd
@@ -50,7 +50,7 @@ def test_pin_round_trips_the_same_tree_exactly(tmp_path):
 def test_pinned_subset_reproduces_those_sessions_unchanged(tmp_path):
     """The whole point: a two-session subset must yield exactly its rows from the full run.
 
-    Without the pin the same subset silently re-anchors — dropping 2-2's earliest session
+    Without the pin the same subset silently re-anchors: dropping 2-2's earliest session
     moves its ``device_d0``, so what was ``timepoint=7`` becomes ``timepoint=0``.
     """
     _root, full, pin_path = _full(tmp_path)
@@ -116,7 +116,7 @@ def test_pin_raises_on_explicit_band_conflicting_with_the_pin(tmp_path):
 
 
 def test_pinned_band_is_used_verbatim_without_a_corpus_pre_pass(tmp_path):
-    """``band="auto"`` must not re-run its percentile pre-pass when a pin is present —
+    """``band="auto"`` must not re-run its percentile pre-pass when a pin is present:
     that percentile would be taken over the subset instead of the pinned corpus."""
     root, _df, pin_path = _full(tmp_path)
     called = []
@@ -167,7 +167,7 @@ def test_pinned_d0_rows_are_used_rather_than_recomputed(tmp_path):
     """Feed back a pin whose baselines have been doubled: a magnitude feature must halve.
 
     Asserting this directly, rather than comparing a subset against a full run, because the
-    predictor features in this fixture are identical at every timepoint — so a re-baselined
+    predictor features in this fixture are identical at every timepoint, so a re-baselined
     run is numerically indistinguishable from a correctly-baselined one there, and only a
     changed baseline can show whether the pinned values are consumed at all.
     """

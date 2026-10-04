@@ -10,9 +10,9 @@ Layout produced under ``--out`` (default ``demo/``):
 
     demo/
       in_vitro/
-        input/   <date>_neurostring_channeltest/ , <date>_neurostring_signal/   raw PSTrace CSVs
-        output/  featureset_raw.parquet + .csv, sensitivity_featureset.csv,
-                 electropycal_analysis_config.json, manifest.json
+        input/   <date>_neurostring_channeltest/ , <date>_neurostring_signal/   raw PSTrace CSVs,
+                 electropycal_analysis_config.json
+        output/  featureset_raw.parquet + .csv, sensitivity_featureset.csv, manifest.json
       in_vivo/
         input/   <date>_neurostring_signal/<dev>_paired_{baseline,live}.csv
         output/  invivo_featureset.csv
@@ -44,8 +44,8 @@ noise_floor around 0.015).
 
 | Path | What |
 |------|------|
-| `in_vitro/input/` | raw PSTrace exports: `*_channeltest` (0 nM screen) and `*_signal` (EIS, dose series, stabilization) folders, one per timepoint |
-| `in_vitro/output/` | what the pipeline produces from that input: the extracted featureset, the per-sensor calibration targets, the analysis config, and a manifest |
+| `in_vitro/input/` | raw PSTrace exports: `*_channeltest` (0 nM screen) and `*_signal` (EIS, dose series, stabilization) folders, one per timepoint, plus `electropycal_analysis_config.json`, the shared band and QC settings the notebooks read |
+| `in_vitro/output/` | what the pipeline produces from that input: the extracted featureset (not D0-normalized), the per-sensor calibration targets, and a manifest |
 | `in_vivo/input/` | paired FSCV+EIS exports per session (`_paired_baseline`, `_paired_live`) for the deployment and domain-shift demo |
 | `in_vivo/output/` | the in-vivo featureset extracted from it |
 
@@ -53,8 +53,8 @@ The notebooks find this tree on their own: leave `ROOT` at `None` and run top to
 point at it explicitly, use `demo/in_vitro/input`, or `demo/in_vivo/input` for
 `deployment_domain_shift`.
 
-Stabilization files use the `-full` spelling (6 rounds of 6 cycles), matching what current
-sessions produce. The generator can also emit the older `-start` and `-end` pair; see
+Stabilization files use the `-full` spelling (6 rounds of 6 cycles), the one current
+acquisition protocols produce. The generator can also emit the older `-start` and `-end` pair; see
 `write_synthetic_pstrace_dir(stab_phases=...)`.
 
 Regenerate at any time. The generator is seeded, so the output is reproducible.
@@ -86,9 +86,9 @@ def main(argv=None) -> int:
     # Only "-full": that is the spelling current acquisition protocols produce, and the demo
     # tree is the de facto documentation of the input contract, so it should show what real
     # data looks like and exercise the branch real data takes (chosen_phases prefers "full").
-    # 6 cycles/round rather than the 20-cycle default: stabilization CSVs dominate the release
-    # and size is linear in rounds x cycles_per_round. The 6 ROUNDS stay -- the convergence check
-    # needs patience=3 rounds below tol.
+    # 6 cycles/round rather than the 20-cycle default: the stabilization CSVs are the largest part
+    # of the demo, and their size is linear in rounds x cycles_per_round. The 6 ROUNDS stay: the
+    # convergence check needs patience=3 rounds below tol.
     #
     # 6 is a MEASURED floor, not a guess. estimate_settle_tau fits an exponential to the cycles
     # within a round, and round_average_cycles first drops each round's cold-start, so too few
@@ -97,7 +97,7 @@ def main(argv=None) -> int:
     #     4 cyc -> [1.9, 1.4, 2726, 3.8]       one degenerate fit
     #     5 cyc -> [1.3, 3.9, 2.3, 18.3]       finite, but a 14x spread
     #     6 cyc -> [1.3, 1.4, 1.4, 5.1]        clean; comparable to 20 cyc's [0.4..0.9]
-    # Going below 6 ships a demo whose convergence table looks broken.
+    # Below 6 cycles the demo's convergence table shows degenerate fits.
     #
     # Nothing has to be told this number: StabilizationIndex.cycle_no reads the `cycle` column
     # that stabilization_traces derives by counting, so generator and reader cannot disagree.

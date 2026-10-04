@@ -154,7 +154,7 @@ def plot_calibration_review(run_dir, condition: str | None = None, show: bool = 
     devs = sorted(P.device.unique())
     axs[1, 2].boxplot([P[P.device == d].residual for d in devs]); axs[1, 2].axhline(0, color="k", lw=0.7)
     axs[1, 2].set_xticklabels(devs, fontsize=7); axs[1, 2].set_xlabel("device"); axs[1, 2].set_title("by device")
-    fig.suptitle(f"{cond} — residual diagnostics", y=1.01); plt.tight_layout()
+    fig.suptitle(f"{cond}: residual diagnostics", y=1.01); plt.tight_layout()
     if show:
         viz.emit("review_calibration_review_3", provenance=_prov, stage=_stage)
 

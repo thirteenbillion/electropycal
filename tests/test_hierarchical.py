@@ -1,4 +1,4 @@
-"""Hierarchical / partial-pooling recalibration model (study experiment E6)."""
+"""Hierarchical / partial-pooling recalibration model."""
 
 import numpy as np
 import pandas as pd
