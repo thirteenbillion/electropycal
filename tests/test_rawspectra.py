@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
+from electropycal.data.pstrace import parse_filename
 from electropycal.data.synthetic import write_synthetic_pstrace_dir
 from electropycal import rawspectra as rs
 
@@ -85,7 +86,7 @@ def test_available_table_without_a_0nM_background_raises_naming_the_tree(tmp_pat
     full = write_synthetic_pstrace_dir(tempfile.mkdtemp())
     src = next(iter(sorted(Path(full).rglob("*_eis_0n[mM].csv"))))
     dosed = sorted(Path(full).rglob("*_fscv_100n[mM].csv"))
-    dev = rs.parse_filename(src.name)["deviceid"]
+    dev = parse_filename(src.name)["deviceid"]
     shutil.copy2(src, sess / f"{dev}_eis_0nM.csv")
     if dosed:
         shutil.copy2(dosed[0], sess / f"{dev}_fscv_100nM.csv")

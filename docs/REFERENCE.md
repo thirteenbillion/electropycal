@@ -274,6 +274,12 @@ hill_n, power_a, power_beta`
     optionally suffixed (`stabilization-full`, `-start`, `-end`); `baseline` / `live` in vivo.
     Doses are matched as a numeric predicate, not an enumerated list, so a new concentration
     needs no code change.
+- **Re-measurements** `session_files`: within one session folder, `<stem>_redo.csv`
+  replaces `<stem>.csv`, file by file, for every reader (extraction, the QC report, the
+  review modules). A device whose files mix redone and original measurements is read and
+  warns `PartialRedoWarning`. Any other trailing token on a recognisable name (`_redo2`,
+  `_old`, `100nM-redo`) raises `UnknownFileSuffix`. A CSV in a `signal` folder that matches
+  no convention warns `UnparsedFileWarning`, naming it, instead of being skipped silently.
 - **`timepoint`** = elapsed **days since that device's first signal session** (staggered series handled
   per device). Device baseline (D0) = the device's earliest date.
 - **In vitro**: per-dose `fscv`/`eis` files across concentrations → dose-response per channel-timepoint.
@@ -326,6 +332,9 @@ shared `AnalysisConfig` value, §1.1 is the one a configured run actually gets.
 - `pstrace.read_pstrace(path, encoding="utf-16") -> PSTraceExport`, parse an
   export; `.fscv[(ch,rep)]`, `.eis[(ch,rep)]`. `parse_filename(name)` (dose →
   float nM, or a token like `"stabilization"`), `parse_folder(name)`.
+  `session_files(folder) -> [(path, meta)]`, the files every reader takes from one session
+  folder, with `_redo` supersession applied and `meta["redo"]` set; `resolve_session_names(names)`,
+  the same rules over a list of names (returns `files`, `superseded`, `unparsed`, `partial`).
 - `quality.eis_quality(freq, z_real, z_imag, band=(10,1e5), mono_tol=0.05) -> dict` checks A (capacitive) / B (monotonic |Z|) / C (Z'>0) + `valid`.
 - `inventory.index_raw(root)`, `channel_survival(idx, total_channels=16)`,
   `quality_filtering(idx)`, dashboard/QC tables.
@@ -343,7 +352,10 @@ shared `AnalysisConfig` value, §1.1 is the one a configured run actually gets.
   detrend=False, baseline_window=(-0.1,0.2), smooth_window=0, smooth_poly=2,
   require_interior=False)`, `method="direct"` = current at V_ox (recommended for broad DA
   peaks), `method="chord"` = chord-baseline height (for sharp peaks); `mean_vpeak`,
-  `mean_ibg`, `noise_floor` (also takes `detrend`), `anodic_sweep`.
+  `mean_ibg`, `noise_floor` (also takes `detrend`), `anodic_sweep`;
+  `align_background(voltages, bg_voltages, bg_current)`, the 0 nM background at each signal
+  sample, read from the same sweep direction (the rising segment from the background's rising
+  segment, the rest from the rest).
 - `normalize.d0_normalize(X, names, d0_row, log=False)`, `fit_zscore/apply_zscore`,
   `fit_robust/apply_robust`.
 - `extract.extract_dataset(root, band, min_norm_snr=3.0, mono_tol=0.10,

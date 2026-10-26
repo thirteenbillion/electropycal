@@ -126,6 +126,13 @@ my_export/
 `fscv`, and `dose` is either a concentration (`0nm`, `100nm`, and so on, parsed to a float in
 nM, with `0nM` the background) or a non-numeric protocol token.
 
+**Re-measurements:** a file named `<stem>_redo.csv` replaces `<stem>.csv` in the same
+session folder, file by file, wherever the folder is read. Redo the 0 nM background along
+with the doses: a device whose redone doses sit beside an original background is still read,
+but warns that its rows mix two runs. Only `_redo` is understood; `_redo2`, `_old` or any
+other trailing token raises rather than guessing, and a CSV that matches no convention warns
+with its name.
+
 The one protocol token today is `stabilization`, matched as `*_fscv_stabilization*.csv` so
 that suffixed variants are picked up: `-full` for a single continuous run, or the `-start`
 and `-end` pair for the first and last rounds of a longer one. Each file holds several rounds

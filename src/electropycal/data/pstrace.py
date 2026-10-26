@@ -303,3 +303,161 @@ def parse_folder(name: str) -> dict | None:
     except ValueError:
         return None
     return {"date": date, "devicetype": "_".join(parts[1:-1]), "testtype": parts[-1].lower()}
+
+
+# ---- session file discovery ------------------------------------------------------------
+#
+# Every reader of a corpus (extraction, the QC report, the review modules, the band and
+# reliability pre-passes) walks a session folder through session_files(), so the rules
+# below hold everywhere at once rather than per caller.
+
+#: Suffix marking a re-measurement: ``<stem>_redo.csv`` replaces ``<stem>.csv``.
+REDO_TOKEN = "redo"
+
+#: Non-numeric final fields a recognised export may carry. Anything else in that position
+#: is reported rather than silently treated as a protocol token.
+PROTOCOL_TOKENS = ("bgd", "baseline", "live")
+_PROTOCOL_PREFIXES = ("stabilization",)
+
+_DOSE_PREFIX_RE = re.compile(r"[\d.]+\s*n[mM]")
+
+
+class UnknownFileSuffix(ValueError):
+    """A recognised export name carries a trailing token other than ``_redo``.
+
+    ``2-2_fscv_100nM_redo2.csv`` or ``2-2_eis_0nM_old.csv``: the file is plainly a
+    measurement, but which measurement it should stand for is not knowable from its name.
+    Guessing either way changes the data, so it raises.
+    """
+
+
+class UnparsedFileWarning(UserWarning):
+    """A CSV in a signal session folder does not follow the naming convention and is skipped."""
+
+
+class PartialRedoWarning(UserWarning):
+    """A device's files in one session are a mix of redone and original measurements."""
+
+
+@dataclass
+class SessionNames:
+    """What :func:`resolve_session_names` decided about one session folder's file names."""
+
+    files: list = field(default_factory=list)           # [(name, meta)], the files to read
+    superseded: dict = field(default_factory=dict)      # original name -> redo name
+    unparsed: list = field(default_factory=list)        # names matching no convention
+    unknown_tokens: list = field(default_factory=list)  # parsed, but an odd final field
+    partial: dict = field(default_factory=dict)         # device -> {"redone", "original"}
+
+
+def _is_known_token(token: str) -> bool:
+    return token in PROTOCOL_TOKENS or token.startswith(_PROTOCOL_PREFIXES)
+
+
+def resolve_session_names(names) -> SessionNames:
+    """Apply the session-folder naming rules to the CSV file names of one folder.
+
+    Pure: it reads names only, so it applies equally to a directory and to a remote listing
+    of files that are not on disk. The rules, in order:
+
+    1. A name :func:`parse_filename` accepts is a measurement.
+    2. ``<stem>_redo.csv``, where ``<stem>.csv`` would parse, is a re-measurement of the
+       same thing and **replaces** ``<stem>.csv`` in that folder, file by file. A redo with
+       no original is simply that measurement.
+    3. Any other trailing token on a parseable stem (``_redo2``, ``_redo_redo``, ``_old``),
+       or a dose field with trailing text (``100nM-redo``), raises
+       :class:`UnknownFileSuffix`.
+    4. Anything else is recorded in ``unparsed``.
+
+    ``partial`` lists each device whose numeric-dose files mix redone and original ones,
+    the case where, for example, a redone dose would be background-subtracted with an
+    original 0 nM background from a different run.
+    """
+    names = sorted(names)
+    out = SessionNames()
+    chosen: dict[str, tuple[str, dict]] = {}            # stem, lowercased -> (name, meta)
+    redone: dict[str, str] = {}                         # original stem -> redo name
+    for name in names:
+        stem = Path(name).stem
+        meta = parse_filename(name)
+        if meta is not None:
+            if isinstance(meta["dose"], str):
+                token = stem.split("_")[-1].strip()
+                if _DOSE_PREFIX_RE.match(token):
+                    raise UnknownFileSuffix(
+                        f"{name}: the dose field {token!r} has trailing text. Only a whole "
+                        f"_{REDO_TOKEN} token marks a re-measurement; rename the file to say "
+                        f"which measurement it is.")
+                if not _is_known_token(meta["dose"]):
+                    out.unknown_tokens.append(name)
+            chosen.setdefault(stem.lower(), (name, {**meta, "redo": False}))
+            continue
+        parts = stem.split("_")
+        base, extra = None, []
+        for k in range(len(parts) - 1, 2, -1):          # longest parseable prefix first
+            if parse_filename("_".join(parts[:k]) + ".csv") is not None:
+                base, extra = parts[:k], parts[k:]
+                break
+        if base is None:
+            out.unparsed.append(name)
+            continue
+        if [t.lower() for t in extra] != [REDO_TOKEN]:
+            raise UnknownFileSuffix(
+                f"{name}: unrecognised suffix {'_' + '_'.join(extra)!r} after "
+                f"{'_'.join(base)!r}. Only _{REDO_TOKEN} is understood, and it replaces the "
+                f"original file; rename the file to say which measurement it is.")
+        key = "_".join(base).lower()
+        redone[key] = name
+        chosen[key] = (name, {**parse_filename("_".join(base) + ".csv"), "redo": True})
+    for name in names:
+        key = Path(name).stem.lower()
+        if key in redone and name != redone[key]:
+            out.superseded[name] = redone[key]
+    out.files = sorted(chosen.values())
+
+    by_device: dict[str, dict] = {}
+    for name, meta in out.files:
+        if not isinstance(meta["dose"], float):
+            continue                                    # stabilization etc. pair with nothing
+        slot = by_device.setdefault(meta["deviceid"], {"redone": [], "original": []})
+        slot["redone" if meta["redo"] else "original"].append(name)
+    out.partial = {d: s for d, s in sorted(by_device.items()) if s["redone"] and s["original"]}
+    return out
+
+
+def session_files(folder) -> list[tuple[Path, dict]]:
+    """The CSV files to read in one session folder, each with its parsed name.
+
+    Returns ``[(path, meta)]`` sorted by file name, where ``meta`` is
+    :func:`parse_filename`'s dict plus ``redo`` (``True`` for a ``_redo`` replacement). The
+    rules are :func:`resolve_session_names`'. In a ``signal`` folder, a CSV matching no
+    convention, or carrying an unrecognised protocol token, warns
+    (:class:`UnparsedFileWarning`) naming the file rather than vanishing. A device mixing
+    redone and original files warns (:class:`PartialRedoWarning`) and is still read.
+    """
+    import warnings
+
+    folder = Path(folder)
+    found = {p.name: p for p in folder.glob("*.csv")}
+    res = resolve_session_names(found)
+    fmeta = parse_folder(folder.name)
+    if fmeta is not None and fmeta["testtype"] == "signal":
+        for name in res.unparsed:
+            warnings.warn(f"{folder.name}/{name}: does not match "
+                          f"<device>_<signaltype>_<dose>.csv, so it is skipped.",
+                          UnparsedFileWarning, stacklevel=2)
+        for name in res.unknown_tokens:
+            warnings.warn(f"{folder.name}/{name}: the final field is neither a concentration "
+                          f"nor a known protocol token, so no reader treats it as a dose.",
+                          UnparsedFileWarning, stacklevel=2)
+    meta_of = dict(res.files)
+    for dev, s in res.partial.items():
+        bg_original = any(meta_of[n]["signaltype"] == "fscv" and meta_of[n]["dose"] == 0.0
+                          for n in s["original"])
+        fscv_redone = any(meta_of[n]["signaltype"] == "fscv" for n in s["redone"])
+        why = (" A redone dose is background-subtracted with the original 0 nM background, "
+               "from a different run." if bg_original and fscv_redone else "")
+        warnings.warn(f"{folder.name}: device {dev} has redone files {s['redone']} alongside "
+                      f"original files {s['original']}, so its rows mix two runs.{why}",
+                      PartialRedoWarning, stacklevel=2)
+    return [(found[name], meta) for name, meta in res.files]

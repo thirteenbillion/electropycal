@@ -22,7 +22,7 @@ import pandas as pd
 
 from .analysis_config import AnalysisConfig, load_analysis_config, resolve_band, save_qc_stats
 from .data.inventory import channel_quality_report
-from .data.pstrace import parse_filename, parse_folder
+from .data.pstrace import parse_folder, session_files
 from .features.fscv import PEAK_EDGE_TOL
 from .viz import channel_color, timepoint_label
 from . import viz
@@ -71,8 +71,7 @@ class QCDashboard:
             fm = parse_folder(folder.name)
             if not fm or fm.get("testtype") != "signal":
                 continue
-            for csv in sorted(folder.glob("*.csv")):
-                m = parse_filename(csv.name)
+            for csv, m in session_files(folder):
                 if m and m["signaltype"] == "fscv" and m["dose"] == 0.0:
                     dates[m["deviceid"]].add(fm["date"]); recs.append((m["deviceid"], fm["date"], str(csv)))
                     self.dtype_of[m["deviceid"]] = fm.get("devicetype", "?")

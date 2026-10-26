@@ -103,6 +103,43 @@ def anodic_sweep(voltages: np.ndarray, *arrays: np.ndarray):
     return (vv, *out)
 
 
+def _rising_mask(v: np.ndarray) -> np.ndarray:
+    """Samples of a cycle on the segment :func:`anodic_sweep` keeps, both vertices included."""
+    m = np.zeros(v.size, bool)
+    if v.size:
+        imin, imax = int(np.argmin(v)), int(np.argmax(v))
+        m[min(imin, imax):max(imin, imax) + 1] = True
+    return m
+
+
+def align_background(voltages: np.ndarray, bg_voltages: np.ndarray,
+                     bg_current: np.ndarray) -> np.ndarray:
+    """The background current at each of ``voltages``, read from the same sweep direction.
+
+    A triangular cycle visits most voltages twice, once rising and once falling, and the two
+    background currents there differ by the full charging current. Interpolating over the
+    whole cycle sorted by voltage takes, wherever the two sweeps sample the *same* voltage,
+    whichever tied sample the sort happened to put last. An unstable sort's tie order varies
+    with the numpy version and the CPU, so the result did too, and it was the falling-sweep
+    current about half the time. Here each sample of the rising segment (as
+    :func:`anodic_sweep` defines it) is read from the background's rising segment, and every
+    other sample from the rest of the background cycle.
+    """
+    v = np.asarray(voltages, float)
+    bv = np.asarray(bg_voltages, float)
+    bc = np.asarray(bg_current, float)
+    out = np.empty(v.shape, float)
+    rise, bg_rise = _rising_mask(v), _rising_mask(bv)
+    for sel, bsel in ((rise, bg_rise), (~rise, ~bg_rise)):
+        if not sel.any():
+            continue
+        if not bsel.any():                    # a background with no such segment: use it all
+            bsel = np.ones(bv.size, bool)
+        o = np.argsort(bv[bsel], kind="stable")
+        out[sel] = np.interp(v[sel], bv[bsel][o], bc[bsel][o])
+    return out
+
+
 BASELINE_WINDOW = (-0.1, 0.2)     # non-Faradaic anchor for optional de-trending
 
 

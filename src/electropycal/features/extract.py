@@ -21,11 +21,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from ..data.pstrace import PSTraceExport, parse_filename, parse_folder, read_pstrace
+from ..data.pstrace import PSTraceExport, parse_folder, read_pstrace, session_files
 from ..data.quality import eis_quality
 from .eis import eis_features, eis_global_features
 from .fscv import (FSCV_SMOOTH_POLY, FSCV_SMOOTH_WINDOW, NONFARADAIC_WINDOW,
-                   PEAK_EDGE_TOL, PEAK_WINDOW, background_features, dose_response_corr,
+                   PEAK_EDGE_TOL, PEAK_WINDOW, align_background, background_features,
+                   dose_response_corr,
                    mean_ibg, mean_vpeak, noise_floor, norm_ipeak, peak_at_edge, peak_shape,
                    repeatability_snr, smooth_current)
 
@@ -168,8 +169,7 @@ def extract_invivo(root: str | Path, band: tuple[float, float] = (10.0, 100_000.
         fmeta = parse_folder(folder.name)
         if not fmeta or fmeta["testtype"] != "signal":
             continue
-        for csv in folder.glob("*.csv"):
-            nm = parse_filename(csv.name)
+        for csv, nm in session_files(folder):
             if not nm or nm["dose"] not in ("baseline", "live"):
                 continue
             dev, date, period = nm["deviceid"], fmeta["date"], nm["dose"]
@@ -211,7 +211,6 @@ def extract_invivo(root: str | Path, band: tuple[float, float] = (10.0, 100_000.
             specs = [v for (c, _), v in sorted(live_eis.eis.items()) if c == ch]
             if not specs:
                 continue
-            bo = np.argsort(bg["voltage"])
             for ti in range(len(cycles)):
                 spec = specs[ti] if ti < len(specs) else specs[-1]   # reuse a static reference EIS
                 fr, zr, zi = spec["freq"], spec["z_real"], spec["z_imag"]
@@ -225,7 +224,7 @@ def extract_invivo(root: str | Path, band: tuple[float, float] = (10.0, 100_000.
                 cyc = cycles[ti]
                 v = cyc["voltage"]
                 cur = smooth_current(cyc["current"], smooth_window, smooth_poly)
-                bg_i = np.interp(v, bg["voltage"][bo], bg["current"][bo])
+                bg_i = align_background(v, bg["voltage"], bg["current"])
                 nip = norm_ipeak(cur, bg_i, v, method=peak_method,
                                  detrend=detrend, baseline_window=baseline_window)
                 row = {"device": dev, "channel": int(ch), "timepoint": timepoint,
@@ -361,7 +360,6 @@ def _extract_session(dev, date, entry, *, device_d0, band, ref_grid, P):
         bgfeat = background_features(bg["voltage"], bg["current"])
         # compute every dose's NormIpeak first, then apply the acceptance test
         # (needed for the across-concentration monotonicity criterion).
-        bo = np.argsort(bg["voltage"])
         candidates: list[tuple[float, float, float, dict]] = []  # (dose, nip, nf, row)
         for dose, fexp in sorted(fscv_exp.items()):
             sig = _avg_fscv(fexp, ch, max_reps=P["max_reps"])
@@ -369,7 +367,7 @@ def _extract_session(dev, date, entry, *, device_d0, band, ref_grid, P):
                 continue
             sig["current"] = smooth_current(sig["current"], P["smooth_window"], P["smooth_poly"])
             v = sig["voltage"]
-            bg_i = np.interp(v, bg["voltage"][bo], bg["current"][bo])  # align to sig grid
+            bg_i = align_background(v, bg["voltage"], bg["current"])  # align to sig grid
             nip = norm_ipeak(sig["current"], bg_i, v, method=P["peak_method"],
                              detrend=P["detrend"], baseline_window=P["baseline_window"],
                              require_interior=P["require_interior_peak"])
@@ -384,7 +382,7 @@ def _extract_session(dev, date, entry, *, device_d0, band, ref_grid, P):
             # stays the numerator.
             rep_cycles = [rc for (c, _), rc in sorted(fexp.fscv.items()) if c == ch][:P["max_reps"]]
             rep_nips = [norm_ipeak(smooth_current(rc["current"], P["smooth_window"], P["smooth_poly"]),
-                        np.interp(rc["voltage"], bg["voltage"][bo], bg["current"][bo]),
+                        align_background(rc["voltage"], bg["voltage"], bg["current"]),
                         rc["voltage"], method=P["peak_method"], detrend=P["detrend"],
                         baseline_window=P["baseline_window"], require_interior=P["require_interior_peak"])
                         for rc in rep_cycles]
@@ -482,14 +480,13 @@ def _reliability_session(dev, date, entry, *, device_d0, band, ref_grid, keep, P
         if bg is None:
             continue
         bg["current"] = smooth_current(bg["current"], P["smooth_window"], P["smooth_poly"])
-        bo = np.argsort(bg["voltage"])
         for dose, fexp in sorted(fscv_exp.items()):
             cyc = [rc for (c, _), rc in sorted(fexp.fscv.items()) if c == ch][:P["max_reps"]]
             fkey = (dev, int(ch), timepoint, float(dose))
             for rc in cyc:
                 v = rc["voltage"]
                 cur = smooth_current(rc["current"], P["smooth_window"], P["smooth_poly"])
-                bg_i = np.interp(v, bg["voltage"][bo], bg["current"][bo])
+                bg_i = align_background(v, bg["voltage"], bg["current"])
                 kw = dict(method=P["peak_method"], detrend=P["detrend"], baseline_window=P["baseline_window"])
                 _shp = peak_shape(cur, bg_i, v, **kw)
                 for name, val in (("mean_Vpeak", mean_vpeak(cur, bg_i, v, **kw)),
@@ -701,8 +698,7 @@ def extract_dataset(root: str | Path, band: tuple[float, float] | str | None = N
             continue
         if _types is not None and fmeta["devicetype"] not in _types:
             continue
-        for csv in folder.glob("*.csv"):
-            nm = parse_filename(csv.name)
+        for csv, nm in session_files(folder):
             if not nm:
                 continue
             dev, date = nm["deviceid"], fmeta["date"]
@@ -907,8 +903,7 @@ def replicate_feature_reliability(
         fmeta = parse_folder(folder.name)
         if not fmeta or fmeta["testtype"] != "signal":
             continue
-        for csv in folder.glob("*.csv"):
-            nm = parse_filename(csv.name)
+        for csv, nm in session_files(folder):
             if not nm:
                 continue
             dev, date = nm["deviceid"], fmeta["date"]

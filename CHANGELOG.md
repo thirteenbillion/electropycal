@@ -5,6 +5,52 @@ means what semver says it means: **the public API may change in a minor release.
 version if you depend on it. 1.0.0 will be a deliberate act, once the surface has stopped
 moving, not a scheduled follow-up.
 
+## 0.11.2
+
+Two fixes to what extraction reads: re-measured files are now used, and the FSCV background
+above about 1.0 V now comes from the right sweep.
+
+### Fixed: `peak_fwhm` read part of the background from the falling sweep
+
+The 0 nM background was aligned to each dose by interpolating over the whole triangular
+cycle sorted by voltage. Above about 1.0 V the rising and falling sweeps of a real export
+sample bit-identical voltages (the two sit 3e-8 to 6e-8 V apart, finer than the export's
+float32 resolution there), and at each tie the interpolation took whichever sample the sort
+placed last. That was often the falling-sweep current, putting spikes of several uA into the
+background-subtracted trace above 1.0 V. The tie order depends on the numpy version and the
+CPU, so the same files gave different results on different machines.
+
+The background is now read from the same sweep direction as each signal sample
+(`features.fscv.align_background`). Measured on real recordings, only `peak_fwhm` changes
+among the featureset's columns: its half-maximum walk runs past 1.0 V, while the peak window
+(0.4 to 1.0 V) that `NormIpeak`, `peak_height`, `peak_area` and `mean_Ibg` read never did.
+Every other column is bit-identical. Over 2,838 rows, `peak_fwhm` moved on 857: by 0.015 V
+at the median and 0.04 V at the 99th percentile, 0.27 V at most, and one row whose trace
+never fell back below half height now has a value. It now agrees across numpy versions to
+the last bits. `peak_fwhm` is a response
+characterization, not a predictor, so no model input changes. The background-subtracted
+full cycles that `rawspectra` plots change above 1.0 V in the same way.
+
+### Added: `_redo` files replace their originals
+
+Within one session folder, `<stem>_redo.csv` now replaces `<stem>.csv`, file by file. These
+files were previously skipped without a word, because the extra token does not parse. The
+rule lives in one place, `data.pstrace.session_files`, which extraction,
+`replicate_feature_reliability`, the QC report, `RawSpectraIndex`, `StabilizationIndex`,
+`diagreview` and the band and inventory pre-passes all use. `resolve_session_names` applies
+the same rule to a list of names.
+
+### Changed: nothing in a signal folder is skipped silently
+
+- A CSV in a `signal` folder that matches no naming convention, or whose final field is
+  neither a concentration nor a known protocol token, warns `UnparsedFileWarning` naming it.
+- Any trailing token other than `_redo` on a recognisable name (`_redo2`, `_redo_redo`,
+  `_old`), or a dose field with trailing text (`100nM-redo`), raises `UnknownFileSuffix`:
+  which measurement such a file stands for cannot be read from its name.
+- A device whose files in one session mix redone and original measurements warns
+  `PartialRedoWarning` and is still read; the warning says so when a redone dose is paired
+  with the original 0 nM background.
+
 ## 0.11.1
 
 A correction release: the documentation checked against the code, one crash fixed, and the

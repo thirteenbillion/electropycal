@@ -10,13 +10,14 @@ of ``(device, timepoint)`` pairs.
 
 from __future__ import annotations
 
+import fnmatch
 from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from .data.pstrace import parse_filename, parse_folder, read_pstrace
+from .data.pstrace import parse_folder, read_pstrace, session_files
 from .data.stabilization import (check_converged, estimate_settle_tau, round_drift_series,
                                  stabilization_traces)
 from .viz import channel_color, panel_grid, timepoint_label
@@ -73,14 +74,12 @@ class StabilizationIndex:
             if not fm:
                 continue
             n_sessions += 1
+            files = session_files(folder)
             if fm.get("testtype") == "signal":
-                for csv in folder.glob("*.csv"):
-                    mm = parse_filename(csv.name)
-                    if mm:
-                        sig_dates[mm["deviceid"]].add(fm["date"])
-            for csv in folder.glob(_STAB_GLOB):
-                m = parse_filename(csv.name)
-                if not m:
+                for csv, mm in files:
+                    sig_dates[mm["deviceid"]].add(fm["date"])
+            for csv, m in files:
+                if not fnmatch.fnmatch(csv.name, _STAB_GLOB):
                     continue
                 phase = m["dose"].split("-", 1)[1] if "-" in m["dose"] else "end"
                 recs.append((m["deviceid"], fm.get("devicetype", "?"), fm["date"], phase, str(csv)))

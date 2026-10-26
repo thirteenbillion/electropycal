@@ -88,17 +88,23 @@ jobs:
           python -m pip install build
           python -m build --outdir dist .
           sha256sum dist/*
+      # The sdist must match PyPI byte for byte. A wheel's bytes also depend on the OS that
+      # zipped it: Python's zipfile records the host in every entry's create_system field
+      # (0 on Windows, 3 elsewhere), so a wheel built on one OS never hashes equal to the same
+      # wheel built on another. A wheel therefore passes on an exact hash, or on identical
+      # contents: the same entries in the same order, with the same bytes, modes, timestamps
+      # and compression, differing in create_system alone. The log says which.
       - name: Compare with PyPI
         env:
           TAG: ${{ github.ref_name }}
         run: |
           python - <<'PY'
-          import hashlib, json, os, pathlib, sys, time, urllib.request
+          import hashlib, io, json, os, pathlib, sys, time, urllib.request, zipfile
           version = os.environ["TAG"].removeprefix("v")
           url = f"https://pypi.org/pypi/electropycal/{version}/json"
           for attempt in range(10):
               try:
-                  served = {u["filename"]: u["digests"]["sha256"]
+                  served = {u["filename"]: (u["digests"]["sha256"], u["url"])
                             for u in json.load(urllib.request.urlopen(url, timeout=30))["urls"]}
                   break
               except Exception as e:
@@ -106,12 +112,28 @@ jobs:
                   time.sleep(30)
           else:
               sys.exit(f"electropycal {version} is not on PyPI")
-          built = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
-                   for p in pathlib.Path("dist").iterdir()}
+
+          def entries(data):
+              z = zipfile.ZipFile(io.BytesIO(data))
+              return [(i.filename, z.read(i.filename), i.external_attr, i.date_time,
+                       i.compress_type) for i in z.infolist()]
+
+          built = {p.name: p.read_bytes() for p in pathlib.Path("dist").iterdir()}
+          if set(built) != set(served):
+              sys.exit(f"built {sorted(built)}, PyPI serves {sorted(served)}")
           ok = True
-          for name, digest in sorted(served.items()):
-              same = built.get(name) == digest
-              ok &= same
-              print(f"{'MATCH   ' if same else 'MISMATCH'} {name} {digest}")
-          sys.exit(0 if ok and set(built) == set(served) else "the rebuild differs from PyPI")
+          for name, (digest, url) in sorted(served.items()):
+              mine = built[name]
+              if hashlib.sha256(mine).hexdigest() == digest:
+                  print(f"MATCH            {name} {digest}")
+                  continue
+              if name.endswith(".whl"):
+                  theirs = urllib.request.urlopen(url, timeout=60).read()
+                  if hashlib.sha256(theirs).hexdigest() == digest and entries(mine) == entries(theirs):
+                      print(f"CONTENT MATCH    {name}: identical entries, differing only in the "
+                            f"zip create_system byte (PyPI's was built on another OS)")
+                      continue
+              print(f"MISMATCH         {name} {digest}")
+              ok = False
+          sys.exit(0 if ok else "the rebuild differs from PyPI")
           PY

@@ -37,9 +37,10 @@ import numpy as np
 import pandas as pd
 
 from .analysis_config import AnalysisConfig, load_analysis_config, resolve_band
-from .data.pstrace import parse_filename, parse_folder, read_pstrace
+from .data.pstrace import parse_folder, read_pstrace, session_files
 from .features.extract import _avg_fscv
-from .features.fscv import (PEAK_WINDOW, DA_WINDOW, anodic_sweep, _locate_peak, norm_ipeak,
+from .features.fscv import (PEAK_WINDOW, DA_WINDOW, align_background, anodic_sweep, _locate_peak,
+                            norm_ipeak,
                             peak_at_edge, peak_edge_clipped, repeatability_snr, smooth_current)
 from .viz import channel_color, concentration_color, panel_grid, timepoint_label, tp_alpha
 from . import viz
@@ -105,8 +106,7 @@ class RawSpectraIndex:
             fm = parse_folder(folder.name)
             if not fm or fm.get("testtype") != testtype:
                 continue
-            for csv in sorted(folder.glob("*.csv")):
-                m = parse_filename(csv.name)
+            for csv, m in session_files(folder):
                 if not m:
                     continue
                 dates[m["deviceid"]].add(fm["date"])
@@ -258,8 +258,7 @@ class RawSpectraIndex:
         bg = self.fscv_raw(dev, tp, ch, 0.0)
         if bg is None:
             return None
-        bo = np.argsort(bg[0])
-        return np.interp(v, bg[0][bo], self._sm(bg[1], smooth_window)[bo])
+        return align_background(v, bg[0], self._sm(bg[1], smooth_window))
 
     def fscv_bgsub(self, dev, tp, ch, dose, smooth_window=0, anodic_only=False):
         """Background-subtracted cycle ``i − i_bg`` (bg = 0 nM); optional smoothing / anodic-only."""
@@ -309,11 +308,11 @@ class RawSpectraIndex:
         bg = _avg_fscv(self._read(pb, self._fscv_cache), ch, max_reps=self.replicates)
         if bg is None:
             return []
-        bo = np.argsort(bg["voltage"]); bgc = self._sm(bg["current"], smooth_window)
+        bgc = self._sm(bg["current"], smooth_window)
         reps = [v for (c, _), v in sorted(self._read(ps, self._fscv_cache).fscv.items()) if c == ch][:self.replicates]
         out = []
         for rc in reps:
-            v = rc["voltage"]; bgi = np.interp(v, bg["voltage"][bo], bgc[bo])
+            v = rc["voltage"]; bgi = align_background(v, bg["voltage"], bgc)
             val = norm_ipeak(self._sm(rc["current"], smooth_window), bgi, v, method=self.peak_method)
             if np.isfinite(val):
                 out.append(float(val))
@@ -333,11 +332,11 @@ class RawSpectraIndex:
         bg = _avg_fscv(self._read(pb, self._fscv_cache), ch, max_reps=self.replicates)
         if bg is None:
             return {}
-        bo = np.argsort(bg["voltage"]); bgc = self._sm(bg["current"], smooth_window)
+        bgc = self._sm(bg["current"], smooth_window)
         reps = [v for (c, _), v in sorted(self._read(ps, self._fscv_cache).fscv.items()) if c == ch][:self.replicates]
         out = {"v_peak": [], "raw_ipeak": [], "bgsub_ipeak": [], "normipeak": []}
         for rc in reps:
-            v = rc["voltage"]; bgi = np.interp(v, bg["voltage"][bo], bgc[bo])
+            v = rc["voltage"]; bgi = align_background(v, bg["voltage"], bgc)
             va, sa, ba = anodic_sweep(v, self._sm(rc["current"], smooth_window), bgi)
             bg_sub = sa - ba
             pk, v_ox, height = _locate_peak(bg_sub, va, PEAK_WINDOW, method=self.peak_method)

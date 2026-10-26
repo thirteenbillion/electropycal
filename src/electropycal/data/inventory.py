@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .pstrace import parse_filename, parse_folder, read_pstrace
+from .pstrace import parse_folder, read_pstrace, session_files
 from .quality import eis_quality, inductive_onset
 
 
@@ -64,8 +64,7 @@ def recommended_band(root: str | Path, lo: float = 10.0, default_hi: float = 100
             continue
         if _types is not None and fmeta["devicetype"] not in _types:
             continue
-        for csv in sorted(folder.glob("*.csv")):
-            nm = parse_filename(csv.name)
+        for csv, nm in session_files(folder):
             if not nm or nm["signaltype"] != "eis":
                 continue
             exp = read_pstrace(csv)
@@ -111,8 +110,7 @@ def band_retention_curve(root: str | Path, uppers=None, lo: float = 10.0,
             continue
         if _types is not None and fmeta["devicetype"] not in _types:
             continue
-        for csv in sorted(folder.glob("*.csv")):
-            nm = parse_filename(csv.name)
+        for csv, nm in session_files(folder):
             if not nm or nm["signaltype"] != "eis":
                 continue
             exp = read_pstrace(csv)
@@ -153,8 +151,7 @@ def index_raw(root: str | Path, band: tuple[float, float] = (10.0, 100_000.0)) -
         fmeta = parse_folder(folder.name)
         if not fmeta:
             continue
-        for csv in sorted(folder.glob("*.csv")):
-            nm = parse_filename(csv.name)
+        for csv, nm in session_files(folder):
             if not nm:
                 continue
             exp = read_pstrace(csv)
@@ -212,8 +209,9 @@ def _qc_session(dev, date, entry, *, d0, band, P):
     session (keeps all channels, no shared ref_grid), so it parallelizes with no determinism
     caveat: concatenating in sorted-session order reproduces the serial tables exactly."""
     from ..features.extract import _avg_eis, _avg_fscv
-    from ..features.fscv import (PEAK_WINDOW, dose_response_corr, mean_vpeak, noise_floor,
-                                 norm_ipeak, peak_at_edge, repeatability_snr, smooth_current)
+    from ..features.fscv import (PEAK_WINDOW, align_background, dose_response_corr, mean_vpeak,
+                                 noise_floor, norm_ipeak, peak_at_edge, repeatability_snr,
+                                 smooth_current)
     sw, sp = P["sw"], P["sp"]
     def _sm(cur):
         return smooth_current(cur, sw, sp) if sw else np.asarray(cur, float)
@@ -242,7 +240,6 @@ def _qc_session(dev, date, entry, *, d0, band, P):
         n_edge = 0                                   # edge-pinned doses among those used
         bg = _avg_fscv(bg_exp, ch, max_reps=P["max_reps"]) if has_fscv else None
         if bg is not None:
-            bo = np.argsort(bg["voltage"])
             bg_cur = _sm(bg["current"])              # smooth the background once, before subtraction
             for dose, fexp in sorted(dose_exps.items()):
                 reps = [v for (cc, _), v in sorted(fexp.fscv.items()) if cc == ch]
@@ -253,7 +250,7 @@ def _qc_session(dev, date, entry, *, d0, band, P):
                     continue
                 v = sig["voltage"]
                 sig_cur = _sm(sig["current"])
-                bg_i = np.interp(v, bg["voltage"][bo], bg_cur[bo])
+                bg_i = align_background(v, bg["voltage"], bg_cur)
                 nip = norm_ipeak(sig_cur, bg_i, v, method=P["peak_method"],
                                  require_interior=P["require_interior_peak"])
                 nf = noise_floor(sig_cur, bg_i, v, window=P["nfw"])
@@ -262,9 +259,11 @@ def _qc_session(dev, date, entry, *, d0, band, P):
                 vpk = mean_vpeak(sig_cur, bg_i, v, method=P["peak_method"])
                 edge = peak_at_edge(vpk, PEAK_WINDOW, P["etol"])
                 negative = bool(nip < 0)
-                rep_nips = [norm_ipeak(_sm(rc["current"]), np.interp(rc["voltage"], bg["voltage"][bo],
-                            bg_cur[bo]), rc["voltage"], method=P["peak_method"],
-                            require_interior=P["require_interior_peak"]) for rc in reps]
+                rep_nips = [norm_ipeak(_sm(rc["current"]),
+                                       align_background(rc["voltage"], bg["voltage"], bg_cur),
+                                       rc["voltage"], method=P["peak_method"],
+                                       require_interior=P["require_interior_peak"])
+                            for rc in reps]
                 rep_nips = [x for x in rep_nips if np.isfinite(x)]
                 rsnr = repeatability_snr(nip, rep_nips)          # NormIpeak / std across cycles
                 # per-dose noise check is the REPRODUCIBILITY SNR (>= min_norm_snr); the RMS
@@ -404,8 +403,7 @@ def channel_quality_report(root: str | Path, band: tuple[float, float] | str = "
         fmeta = parse_folder(folder.name)
         if not fmeta or fmeta["testtype"] != "signal":
             continue
-        for csv in sorted(folder.glob("*.csv")):
-            nm = parse_filename(csv.name)
+        for csv, nm in session_files(folder):
             if not nm:
                 continue
             dev, date = nm["deviceid"], fmeta["date"]

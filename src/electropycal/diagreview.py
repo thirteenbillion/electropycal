@@ -135,15 +135,14 @@ class DiagnosticsReview:
         return fig, fl
 
     def _device_baselines(self) -> dict:
-        from .data.pstrace import parse_folder, parse_filename
+        from .data.pstrace import parse_folder, session_files
         from collections import defaultdict
         dates = defaultdict(set)
         for folder in sorted(p for p in Path(self.root).iterdir() if p.is_dir()):
             fm = parse_folder(folder.name)
             if not fm or fm.get("testtype") != "signal":
                 continue
-            for csv in folder.glob("*.csv"):
-                nm = parse_filename(csv.name)
+            for csv, nm in session_files(folder):
                 if nm:
                     dates[nm["deviceid"]].add(fm["date"])
         return {dev: min(ds) for dev, ds in dates.items()}
@@ -151,13 +150,12 @@ class DiagnosticsReview:
     def _inband_freqs(self):
         if self.root is None or self.band is None:
             return None
-        from .data.pstrace import parse_folder, parse_filename, read_pstrace
+        from .data.pstrace import parse_folder, read_pstrace, session_files
         for folder in sorted(p for p in Path(self.root).iterdir() if p.is_dir()):
             fm = parse_folder(folder.name)
             if not fm or fm.get("testtype") != "signal":
                 continue
-            for csv in sorted(folder.glob("*.csv")):
-                nm = parse_filename(csv.name)
+            for csv, nm in session_files(folder):
                 if nm and nm["signaltype"] == "eis":
                     try:
                         exp = read_pstrace(csv)
@@ -526,7 +524,7 @@ class DiagnosticsReview:
         import matplotlib.pyplot as plt
         if self.root is None:
             print("frequency-bandwidth tradeoff needs the raw ROOT; skipping."); return
-        from .data.pstrace import parse_folder, parse_filename, read_pstrace
+        from .data.pstrace import parse_folder, read_pstrace, session_files
         from .features.eis import eis_features
         from .features.extract import _avg_eis
         d0 = self._device_baselines()
@@ -538,8 +536,7 @@ class DiagnosticsReview:
             fm = parse_folder(folder.name)
             if not fm or fm.get("testtype") != "signal":
                 continue
-            for csv in sorted(folder.glob("*.csv")):
-                nm = parse_filename(csv.name)
+            for csv, nm in session_files(folder):
                 if not nm or nm["signaltype"] != "eis" or nm["deviceid"] not in d0:
                     continue
                 tp = float((fm["date"] - d0[nm["deviceid"]]).days)

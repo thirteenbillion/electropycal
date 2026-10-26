@@ -197,13 +197,14 @@ def _sweep():
     its first sample: the real instrument's geometry (``desc[::-1] ≈ asc + step``, to within the
     ~1e-8 V of its float32 export).
 
-    This is load-bearing, not cosmetic. A perfect mirror (``asc`` then ``asc[::-1]``) places anodic
-    and cathodic samples at *bit-identical* voltages, and the background alignment in
-    ``extract_dataset`` interpolates the signal grid onto the **sorted** background voltages; on an
-    exact tie ``np.interp`` returns the last match, i.e. the cathodic sample. Every anodic point
-    would then be subtracted against the other branch and ``NormIpeak`` would report the ~22 uA
-    capacitive loop instead of the ~0.3 uA faradaic peak. Real exports are safe only because their
-    two branches never land on bit-identical voltages.
+    A perfect mirror (``asc`` then ``asc[::-1]``) places anodic and cathodic samples at
+    *bit-identical* voltages. Real exports do that too, above about 1.0 V: their branches sit
+    3e-8 to 6e-8 V apart, finer than the export's float32 resolution there (1.2e-7 V), so both
+    round to the same value. Background alignment once interpolated over the whole cycle sorted
+    by voltage, and at a tie took whichever sample the sort put last, often the cathodic one;
+    :func:`~electropycal.features.fscv.align_background` now reads each sample from its own
+    branch, so a tie no longer matters. The offset is kept so this generator's output, and
+    every number derived from it, is unchanged.
     """
     half = _FSCV["n_sweep"] // 2
     step = (_FSCV["v_hi"] - _FSCV["v_lo"]) / (half - 1)
